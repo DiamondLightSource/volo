@@ -1,0 +1,34 @@
+# compiled python
+*.pyc
+
+# pytest
+.cache
+
+# virtualenv
+bin
+lib
+include
+share
+venv*
+pip-selfcheck.json
+
+# build artifacts
+dist
+*.egg-info/
+
+# coverage
+.coverage
+htmlcov/
+
+# editors
+pytac/#*
+*.swp
+*.swo
+*~
+.idea/
+
+# documentation
+docs/_build
+
+# jupyter
+.ipynb_checkpoints
