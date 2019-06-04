@@ -61,35 +61,17 @@ class Window(QMainWindow):
         # border-bottom-width:1px;border-bottom-style:solid; border-radius:0px
 
         # create lattice representation bar
-        #wrapper = QWidget(self)
-        #wrapper.setMinimumSize(1000, 120)
-        #repr_box = QHBoxLayout(wrapper)
-        #repr_box.setSpacing(0)
-        self.container = QWidget(self)
-        #self.container.setStyleSheet("background-color:white")
-        #self.container.setMinimumSize(880, 120)
-        self.lat_disp = QHBoxLayout(self.container)
+        self.lat_disp = QHBoxLayout()
         self.lat_disp.setSpacing(0)
-        #self.lat_disp.setAlignment(Qt.AlignHCenter)
-        #self.lat_disp.setContentsMargins(QMargins(0, 0, 0, 0))
-        #self.lat_disp.setStretch(0, 0)
-        # add first spacer and offset
-        lat_repr, space = self.create_lat_repr(1500)
-        if space > 0:
-            self.lat_disp.addSpacing(space)
-        # add element lines
-        for elem_repr in lat_repr:
-                self.lat_disp.addWidget(elem_repr)
-        # add end spacer
-        if space > 0:
-            self.lat_disp.addSpacing(space)
-        #for i in range(self.lat_disp.count()):
-            #print(self.lat_disp.stretch(i))
-        #repr_box.addStretch()
-        #repr_box.addWidget(self.container)
-        #repr_box.addStretch()
-        #left_side.addWidget(self.container)
-        #left_side.addLayout(self.lat_disp)
+        self.lat_disp.setContentsMargins(QMargins(0, 0, 0, 0))
+        self.lat_disp.addStretch()
+        self.lat_disp.addWidget(element_repr(1, Qt.black))
+        self.lat_repr = self.create_lat_repr()
+        for el in self.lat_repr:
+            self.lat_disp.addWidget(el)
+        self.lat_disp.addWidget(element_repr(1, Qt.black))
+        self.lat_disp.addStretch()
+        self.left_side.addLayout(self.lat_disp)
 
         # create elem editing boxes to drop to
         bottom = QHBoxLayout()
@@ -151,44 +133,53 @@ class Window(QMainWindow):
         #self.setStyleSheet("background-color:white")
         self.show()
 
-    def create_lat_repr(self, repr_len=None):
-        # create element representations
-        if repr_len is None:
-            repr_len = int(self.axl.get_window_extent().width)
-        if repr_len < 880:
-            repr_len = 880
-        ratio = repr_len / self.total_len
-        total_width = 0
+    def create_lat_repr(self):
         lat_repr = []
-        for elem in self.lattice[self.lattice.i_range]:
-            width = elem.Length * ratio
-            if width >= 1:
-                width = int(width)
-            else:
-                width = math.ceil(width)
+        self.base_widths = []
+        for elem in self.lattice[:415]:
+            width = math.ceil(elem.Length)
             if width != 0:
-                total_width += width
+                self.base_widths.append(elem.Length)
                 if isinstance(elem, at.elements.Drift):
-                    colour = Qt.gray
+                    elem_repr = element_repr(width, Qt.white)
                 elif isinstance(elem, at.elements.Dipole):
-                    colour = Qt.green
+                    elem_repr = element_repr(width, Qt.green)
                 elif isinstance(elem, at.elements.Quadrupole):
-                    colour = Qt.red
+                    elem_repr = element_repr(width, Qt.red)
                 elif isinstance(elem, at.elements.Sextupole):
-                    colour = Qt.yellow
+                    elem_repr = element_repr(width, Qt.yellow)
                 else:
-                    #print(type(elem))
-                    colour = Qt.blue
-                elem_repr = element_repr(width, colour)
-                elem_repr.resize(width, 100)
-                #elem_repr.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-                #elem_repr.setStyleSheet("background-color:grey")
+                    elem_repr = element_repr(width, Qt.blue)
                 lat_repr.append(elem_repr)
-        # calculate spacers
-        space = (self.frameGeometry().width() - 5180 - total_width) / 2
-        #print(self.frameGeometry().width(), repr_len, total_width, space)
-        space = 100
-        return lat_repr, math.ceil(space)
+        return lat_repr
+
+    def calc_new_width(self, new_width):
+        scale_factor = new_width / sum(self.base_widths)
+        scaled_widths = [width * scale_factor for width in self.base_widths]
+        rounding = []
+        for index in range(len(scaled_widths)):
+            if scaled_widths[index] == 0:
+                pass
+            elif scaled_widths[index] < 1:
+                scaled_widths[index] = 1
+            else:
+                value = scaled_widths[index]
+                scaled_widths[index] = round(value)
+                if round(value) >= 2:
+                    rounding.append((value, index))
+        rounding.sort()  # sort smallest to biggest
+        diff = round(sum(scaled_widths) - new_width)
+        if abs(diff) > len(rounding):
+            raise ValueError("too many elements with 0<length<1")
+        if diff > 0:  # overshoot
+            for i in range(diff):
+                _, index = rounding.pop()
+                scaled_widths[index] = numpy.maximum(scaled_widths[index]-1, 1)
+        elif diff < 0:  # undershoot
+            for i in range(abs(diff)):
+                _, index = rounding.pop(0)
+                scaled_widths[index] = scaled_widths[index]+1
+        return scaled_widths
 
     def create_edit_box(self):
         data_labels = {}
@@ -300,15 +291,14 @@ class Window(QMainWindow):
             else:
                 self.s_selection = None
             self.canvas.draw()
-            self.resize_graph(True)
+            self.resize_graph(self.graph_width, True)
         """
         print('%s click: button=%d, x=%d, y=%d, xdata=%f, ydata=%f' %
               ('double' if event.dblclick else 'single', event.button,
                event.x, event.y, event.xdata, event.ydata))
         """
 
-    def resize_graph(self, redraw=False):
-        width = max([self.frameGeometry().width() - 500, 1000])
+    def resize_graph(self, width, redraw=False):
         if (int(width) != int(self.graph_width)) or redraw:
             #dpi = self.figure.dpi
             self.canvas.flush_events()
@@ -317,35 +307,14 @@ class Window(QMainWindow):
             self.graph_width = width
 
     def resizeEvent(self, event):
-        self.resize_graph()
-        """
-        for i in reversed(range(self.lat_disp.count())):
-            widget = self.lat_disp.takeAt(i)
-            #self.lat_disp.removeWidget(widget)
-            if not isinstance(widget, QSpacerItem):
-                widget.widget().close()
-        lat_repr, space = self.create_lat_repr()
-        # add first spacer and offset
-        self.lat_disp.addSpacing(space)
-        # add element lines
-        for elem_repr in lat_repr:
-                self.lat_disp.addWidget(elem_repr)
-        # add end spacer
-        self.lat_disp.addSpacing(space)
-        """"""
-        lat_repr, space = self.create_lat_repr()
-        for i in range(self.lat_disp.count()-2):
-            widget = self.lat_disp.takeAt(1)
-            widget.widget().close()
-            widget.widget().deleteLater()
-        # put new elem representations in
-        for elem_repr in reversed(lat_repr):
-            self.lat_disp.insertWidget(1, elem_repr, 0)
-        # update spacer elements
-        self.lat_disp.itemAt(0).changeSize(space, 100)
-        self.lat_disp.itemAt(self.lat_disp.count()-1).changeSize(space, 100)
-        #print(self.lat_disp.itemAt(0))
-        """
+        width = int(max([self.frameGeometry().width() - 500, 1000]))
+        #print(width)
+        self.resize_graph(width)
+        #print(self.axl.get_tightbbox(self.canvas.get_renderer()).width)
+        #print(self.axl.get_window_extent().width)
+        widths = self.calc_new_width(width - 125)
+        for el, w in zip(self.lat_repr, widths):
+            el.changeSize(w)
         super().resizeEvent(event)
 
 
@@ -354,12 +323,21 @@ class element_repr(QWidget):
         super().__init__()
         self.width = width
         self.colour = colour
+        self.setMinimumHeight(100)
+        self.setMinimumWidth(width)
+        #self.setStyleSheet('QFrame {background-color:white;}')
 
     def paintEvent(self, e):
         qp = QPainter(self)
         qp.setPen(self.colour)
         qp.setBrush(self.colour)
         qp.drawRect(0, 0, self.width, 100)
+
+    def changeSize(self, width, height=None):
+        self.width = width
+        self.setMinimumWidth(width)
+        #self.setMaximumWidth(width)
+        self.repaint()
 
 
 if __name__ == '__main__':

@@ -17,7 +17,7 @@ class Window(QMainWindow):
 
     def initUI(self):
         layout = QHBoxLayout()
-        p = element_repr(0.5, Qt.red)
+        p = element_repr(1000, Qt.red)
         #layout.addStretch()
         layout.addWidget(p)
         #layout.addStretch()

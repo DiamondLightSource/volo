@@ -22,7 +22,7 @@ class Window(QMainWindow):
         self.layout.setSpacing(0)
         self.layout.addStretch()
         self.lat_repr = self.create_lat_repr()
-        widths = self.calc_new(880)
+        widths = self.calc_new(1000)
         for el, w in zip(self.lat_repr, widths):
             el.changeSize(w)
             self.layout.addWidget(el)
@@ -128,7 +128,7 @@ class element_repr(QWidget):
         self.setMaximumWidth(width)
         self.repaint()
 
-        
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = Window()
