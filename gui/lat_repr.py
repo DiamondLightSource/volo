@@ -1,14 +1,12 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGroupBox, QWidget
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QGridLayout, QSpacerItem, QSizePolicy
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush
-from PyQt5.QtCore import Qt, QRect, QMargins
-
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout
+from PyQt5.QtGui import QPainter
+from PyQt5.QtCore import Qt
 import sys
 import at
-import numpy
 import atip.ease as e
 import math
 import time
+
 
 class Window(QMainWindow):
     def __init__(self, parent=None):
@@ -77,7 +75,7 @@ class Window(QMainWindow):
         if diff > 0:  # overshoot
             for i in range(diff):
                 _, index = rounding.pop()
-                scaled_widths[index] = numpy.maximum(scaled_widths[index]-1, 1)
+                scaled_widths[index] = max([scaled_widths[index]-1, 1])
         elif diff < 0:  # undershoot
             for i in range(abs(diff)):
                 _, index = rounding.pop(0)
@@ -97,7 +95,6 @@ class Window(QMainWindow):
         else:
             _, tot_len = self.calc_new_widths(width, sum(self.base_widths))
             print(tot_len)
-            var = width / 0.01
             while tot_len < width:
                 widths, tot_len = self.calc_new_widths(width, tot_len)
                 print(tot_len)

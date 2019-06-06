@@ -1,14 +1,8 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGroupBox, QWidget
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QGridLayout, QSpacerItem, QSizePolicy
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush
-from PyQt5.QtCore import Qt, QRect, QMargins
-
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout
+from PyQt5.QtGui import QPainter
+from PyQt5.QtCore import Qt
 import sys
-import at
-import numpy
-import atip.ease as e
-import math
-import time
+
 
 class Window(QMainWindow):
     def __init__(self, parent=None):
@@ -27,6 +21,7 @@ class Window(QMainWindow):
         self.setWindowTitle('Colours')
         self.show()
 
+
 class element_repr(QWidget):
     def __init__(self, width, colour):
         super().__init__()
@@ -42,7 +37,7 @@ class element_repr(QWidget):
         qp.setBrush(self.colour)
         qp.drawRect(0, 0, self.width, 100)
 
-        
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = Window()

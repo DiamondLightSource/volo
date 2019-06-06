@@ -1,11 +1,11 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGroupBox, QWidget
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QGridLayout, QSpacerItem, QSizePolicy
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush, QDrag
-from PyQt5.QtCore import Qt, QRect, QMargins, QMimeData
-
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QGridLayout
+from PyQt5.QtWidgets import QSpacerItem, QLineEdit
+from PyQt5.QtGui import QPainter, QDrag, QDoubleValidator, QValidator
+from PyQt5.QtCore import Qt, QMargins, QMimeData
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-
+import os
 import sys
 import at
 import at.plot
@@ -13,7 +13,6 @@ import numpy
 from collections import OrderedDict
 import atip.ease as e
 import math
-import time
 
 
 class Window(QMainWindow):
@@ -33,12 +32,10 @@ class Window(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        #print(self.frameGeometry())
         self.setGeometry(0, 0, 1500, 800)
         # initialise layouts
         layout = QHBoxLayout()
         layout.setSpacing(20)
-        #layout.setStretch(0, 0)
         self.left_side = QVBoxLayout()
         self.left_side.setAlignment(Qt.AlignLeft)
 
@@ -48,12 +45,10 @@ class Window(QMainWindow):
         self.canvas = FigureCanvas(self.figure)
         self.canvas.mpl_connect('button_press_event', self.graph_onclick)
         self.plot()
-        #self.canvas.resize(1000, 480)
         self.canvas.setMinimumWidth(1000)
         self.canvas.setMinimumHeight(480)
         self.canvas.setMaximumHeight(480)
         self.graph_width = 1000
-        #self.canvas._dpi_ratio = 2
         self.figure.set_tight_layout({"pad": 0.5, "w_pad": 0, "h_pad": 0})
         graph.addWidget(self.canvas)
         self.left_side.addLayout(graph)
@@ -75,14 +70,10 @@ class Window(QMainWindow):
 
         # create elem editing boxes to drop to
         bottom = QHBoxLayout()
-        box1 = edit_box(self.lattice)
-        bottom.addWidget(box1)
-        box2 = edit_box(self.lattice)
-        bottom.addWidget(box2)
-        box3 = edit_box(self.lattice)
-        bottom.addWidget(box3)
-        box4 = edit_box(self.lattice)
-        bottom.addWidget(box4)
+        bottom.addWidget(edit_box(self.lattice))
+        bottom.addWidget(edit_box(self.lattice))
+        bottom.addWidget(edit_box(self.lattice))
+        bottom.addWidget(edit_box(self.lattice))
         self.left_side.addLayout(bottom)
         self.left_side.addStretch()
 
@@ -124,13 +115,26 @@ class Window(QMainWindow):
             sidebar.addWidget(lab, row_count, 1)
             self.element_data_widgets[field] = lab
             row_count += 1
+        # Add units tool tips
+        self.lattice_data_widgets["Total Length"].setToolTip("m")
+        self.lattice_data_widgets["Horizontal Emittance"].setToolTip("pm")
+        self.lattice_data_widgets["Linear Dispersion Action"].setToolTip("m")
+        self.lattice_data_widgets["Energy Loss per Turn"].setToolTip("eV")
+        self.lattice_data_widgets["Damping Times"].setToolTip("msec")
+        self.lattice_data_widgets["Total Bend Angle"].setToolTip("deg")
+        self.lattice_data_widgets["Total Absolute Bend Angle"].setToolTip("deg")
+        self.element_data_widgets["Selected S Position"].setToolTip("m")
+        self.element_data_widgets["Element Start S Position"].setToolTip("m")
+        self.element_data_widgets["Element Length"].setToolTip("m")
+        self.element_data_widgets["Horizontal Linear Dispersion"].setToolTip("m")
+        self.element_data_widgets["Beta Function"].setToolTip("m")
         layout.addLayout(sidebar)
 
         # set layout
         wid = QWidget(self)
         wid.setLayout(layout)
         self.setCentralWidget(wid)
-        #self.setStyleSheet("background-color:white")
+        self.setStyleSheet("background-color:white")
         self.show()
 
     def create_lat_repr(self):
@@ -205,7 +209,7 @@ class Window(QMainWindow):
         all_s = self._atsim.get_s()
         index = int(numpy.where([s <= selected_s_pos for s in all_s])[0][-1])
         data_dict["Selected S Position"] = selected_s_pos
-        data_dict["Element Index"] = index
+        data_dict["Element Index"] = index + 1
         data_dict["Element Start S Position"] = all_s[index]
         data_dict["Element Length"] = self._atsim.get_at_element(index+1).Length
         data_dict["Horizontal Linear Dispersion"] = self._atsim.get_disp()[index, 0]
@@ -275,18 +279,15 @@ class Window(QMainWindow):
 
     def resize_graph(self, width, redraw=False):
         if (int(width) != int(self.graph_width)) or redraw:
-            #dpi = self.figure.dpi
+            # dpi = self.figure.dpi
             self.canvas.flush_events()
-            #self.figure.set_size_inches(width/dpi, 480/dpi, forward=True)
+            # self.figure.set_size_inches(width/dpi, 480/dpi, forward=True)
             self.canvas.resize(width, 480)
             self.graph_width = width
 
     def resizeEvent(self, event):
         width = int(max([self.frameGeometry().width() - 500, 1000]))
-        #print(width)
         self.resize_graph(width)
-        #print(self.axl.get_tightbbox(self.canvas.get_renderer()).width)
-        #print(self.axl.get_window_extent().width)
         widths = self.calc_new_width(width - 125)
         for el, w in zip(self.lat_repr, widths):
             el.changeSize(w)
@@ -301,7 +302,6 @@ class element_repr(QWidget):
         self.colour = colour
         self.setMinimumHeight(100)
         self.setMinimumWidth(width)
-        #self.setStyleSheet('QFrame {background-color:white;}')
 
     def paintEvent(self, event):
         qp = QPainter(self)
@@ -312,7 +312,6 @@ class element_repr(QWidget):
     def changeSize(self, width, height=None):
         self.width = width
         self.setMinimumWidth(width)
-        #self.setMaximumWidth(width)
         self.repaint()
 
     def mouseMoveEvent(self, event):
@@ -321,7 +320,7 @@ class element_repr(QWidget):
             mimeData.setText(str(self.index))
             drag = QDrag(self)
             drag.setMimeData(mimeData)
-            dropAction = drag.exec(Qt.MoveAction)
+            drag.exec(Qt.MoveAction)  # dropAction =
         return
 
 
@@ -329,28 +328,35 @@ class edit_box(QGroupBox):
     def __init__(self, lattice):
         super().__init__()
         self.lattice = lattice
-        self.setMaximumSize(200, 200)
+        self.setMaximumSize(300, 200)
         self.setAcceptDrops(True)
         self.dl = self.create_box()
 
     def create_box(self):
         data_labels = {}
         grid = QGridLayout()
-        #grid.setColumnStretch(0, 0)
-        #grid.setRowStretch(0, 0)
+        float_validator = QDoubleValidator()
+        float_validator.setNotation(QDoubleValidator.StandardNotation)
+        pass_validator = PassMethodValidator()
         data_labels["Index"] = QLabel("N/A")
         grid.addWidget(QLabel("Index"), 0, 0)
         grid.addWidget(data_labels["Index"], 0, 1)
         data_labels["Type"] = QLabel("N/A")
         grid.addWidget(QLabel("Type"), 1, 0)
         grid.addWidget(data_labels["Type"], 1, 1)
-        data_labels["Length"] = QLabel("N/A")
+        data_labels["Length"] = QLineEdit("")
+        data_labels["Length"].setAcceptDrops(False)
+        data_labels["Length"].setValidator(float_validator)
         grid.addWidget(QLabel("Length"), 2, 0)
         grid.addWidget(data_labels["Length"], 2, 1)
-        data_labels["PassMethod"] = QLabel("N/A")
+        data_labels["PassMethod"] = QLineEdit("")
+        data_labels["PassMethod"].setAcceptDrops(False)
+        data_labels["PassMethod"].setValidator(pass_validator)
         grid.addWidget(data_labels["PassMethod"], 3, 1)
         grid.addWidget(QLabel("PassMethod"), 3, 0)
-        data_labels["SetPoint"] = (QLabel("Set Point Field"), QLabel("N/A"))
+        data_labels["SetPoint"] = (QLabel("Set Point"), QLineEdit("N/A"))
+        data_labels["SetPoint"][1].setAcceptDrops(False)
+        data_labels["SetPoint"][1].setValidator(float_validator)
         grid.addWidget(data_labels["SetPoint"][1], 5, 1)
         grid.addWidget(data_labels["SetPoint"][0], 5, 0)
         self.setLayout(grid)
@@ -368,7 +374,10 @@ class edit_box(QGroupBox):
         self.dl["Type"].setText(element.Class)
         self.dl["Length"].setText(str(element.Length))
         self.dl["PassMethod"].setText(element.PassMethod)
-        if isinstance(element, at.elements.Bend):
+        if isinstance(element, at.elements.Drift):
+            self.dl["SetPoint"][0].setText("Set Point Field")
+            self.dl["SetPoint"][1].setText("N/A")
+        elif isinstance(element, at.elements.Bend):
             self.dl["SetPoint"][0].setText("BendingAngle")
             self.dl["SetPoint"][1].setText(str(element.BendingAngle))
         elif isinstance(element, at.elements.Corrector):
@@ -383,6 +392,24 @@ class edit_box(QGroupBox):
         else:  # Drift or unsupported type.
             pass
         event.accept()
+
+
+class PassMethodValidator(QValidator):
+    def __init__(self):
+        super().__init__()
+
+    def validate(self, string, pos):
+        if (len(string) > 0) and (not string.isalnum()):
+            return (QValidator.Invalid, string, pos)
+        elif string.endswith("Pass"):
+            file_name = at.load.utils.get_file_name(string)
+            file_path = os.path.join(at.integrators.__path__[0], file_name)
+            if os.path.isfile(os.path.realpath(file_path)):
+                return (QValidator.Acceptable, string, pos)
+            else:
+                return (QValidator.Invalid, string, pos)
+        else:
+            return (QValidator.Intermediate, string, pos)
 
 
 if __name__ == '__main__':
