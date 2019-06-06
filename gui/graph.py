@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGroupBox, QWidget
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QGridLayout, QSpacerItem, QSizePolicy
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush
-from PyQt5.QtCore import Qt, QRect, QMargins
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush, QDrag
+from PyQt5.QtCore import Qt, QRect, QMargins, QMimeData
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -65,23 +65,23 @@ class Window(QMainWindow):
         self.lat_disp.setSpacing(0)
         self.lat_disp.setContentsMargins(QMargins(0, 0, 0, 0))
         self.lat_disp.addStretch()
-        self.lat_disp.addWidget(element_repr(1, Qt.black))
+        self.lat_disp.addWidget(element_repr(-1, 1, Qt.black))
         self.lat_repr = self.create_lat_repr()
         for el in self.lat_repr:
             self.lat_disp.addWidget(el)
-        self.lat_disp.addWidget(element_repr(1, Qt.black))
+        self.lat_disp.addWidget(element_repr(-1, 1, Qt.black))
         self.lat_disp.addStretch()
         self.left_side.addLayout(self.lat_disp)
 
         # create elem editing boxes to drop to
         bottom = QHBoxLayout()
-        box1, data1 = self.create_edit_box()
+        box1 = edit_box(self.lattice)
         bottom.addWidget(box1)
-        box2, data2 = self.create_edit_box()
+        box2 = edit_box(self.lattice)
         bottom.addWidget(box2)
-        box3, data3 = self.create_edit_box()
+        box3 = edit_box(self.lattice)
         bottom.addWidget(box3)
-        box4, data4 = self.create_edit_box()
+        box4 = edit_box(self.lattice)
         bottom.addWidget(box4)
         self.left_side.addLayout(bottom)
         self.left_side.addStretch()
@@ -141,15 +141,15 @@ class Window(QMainWindow):
             if width != 0:
                 self.base_widths.append(elem.Length)
                 if isinstance(elem, at.elements.Drift):
-                    elem_repr = element_repr(width, Qt.white)
+                    elem_repr = element_repr(elem.Index, width, Qt.white)
                 elif isinstance(elem, at.elements.Dipole):
-                    elem_repr = element_repr(width, Qt.green)
+                    elem_repr = element_repr(elem.Index, width, Qt.green)
                 elif isinstance(elem, at.elements.Quadrupole):
-                    elem_repr = element_repr(width, Qt.red)
+                    elem_repr = element_repr(elem.Index, width, Qt.red)
                 elif isinstance(elem, at.elements.Sextupole):
-                    elem_repr = element_repr(width, Qt.yellow)
+                    elem_repr = element_repr(elem.Index, width, Qt.yellow)
                 else:
-                    elem_repr = element_repr(width, Qt.blue)
+                    elem_repr = element_repr(elem.Index, width, Qt.blue)
                 lat_repr.append(elem_repr)
         return lat_repr
 
@@ -180,31 +180,6 @@ class Window(QMainWindow):
                 _, index = rounding.pop(0)
                 scaled_widths[index] = scaled_widths[index]+1
         return scaled_widths
-
-    def create_edit_box(self):
-        data_labels = {}
-        box = QGroupBox()
-        box.setMaximumSize(200, 200)
-        grid = QGridLayout()
-        #grid.setColumnStretch(0, 0)
-        #grid.setRowStretch(0, 0)
-        data_labels["Index"] = QLabel("N/A")
-        grid.addWidget(QLabel("Index"), 0, 0)
-        grid.addWidget(data_labels["Index"], 0, 1)
-        data_labels["Type"] = QLabel("N/A")
-        grid.addWidget(QLabel("Type"), 1, 0)
-        grid.addWidget(data_labels["Type"], 1, 1)
-        data_labels["Length"] = QLabel("N/A")
-        grid.addWidget(QLabel("Length"), 2, 0)
-        grid.addWidget(data_labels["Length"], 2, 1)
-        data_labels["PassMethod"] = QLabel("N/A")
-        grid.addWidget(data_labels["PassMethod"], 3, 1)
-        grid.addWidget(QLabel("PassMethod"), 3, 0)
-        data_labels["SetPoint"] = (QLabel("Set Point Field"), QLabel("N/A"))
-        grid.addWidget(data_labels["SetPoint"][1], 5, 1)
-        grid.addWidget(data_labels["SetPoint"][0], 5, 0)
-        box.setLayout(grid)
-        return box, data_labels
 
     def get_lattice_data(self):
         data_dict = OrderedDict()
@@ -319,15 +294,16 @@ class Window(QMainWindow):
 
 
 class element_repr(QWidget):
-    def __init__(self, width, colour):
+    def __init__(self, index, width, colour):
         super().__init__()
+        self.index = index
         self.width = width
         self.colour = colour
         self.setMinimumHeight(100)
         self.setMinimumWidth(width)
         #self.setStyleSheet('QFrame {background-color:white;}')
 
-    def paintEvent(self, e):
+    def paintEvent(self, event):
         qp = QPainter(self)
         qp.setPen(self.colour)
         qp.setBrush(self.colour)
@@ -338,6 +314,75 @@ class element_repr(QWidget):
         self.setMinimumWidth(width)
         #self.setMaximumWidth(width)
         self.repaint()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton:
+            mimeData = QMimeData()
+            mimeData.setText(str(self.index))
+            drag = QDrag(self)
+            drag.setMimeData(mimeData)
+            dropAction = drag.exec(Qt.MoveAction)
+        return
+
+
+class edit_box(QGroupBox):
+    def __init__(self, lattice):
+        super().__init__()
+        self.lattice = lattice
+        self.setMaximumSize(200, 200)
+        self.setAcceptDrops(True)
+        self.dl = self.create_box()
+
+    def create_box(self):
+        data_labels = {}
+        grid = QGridLayout()
+        #grid.setColumnStretch(0, 0)
+        #grid.setRowStretch(0, 0)
+        data_labels["Index"] = QLabel("N/A")
+        grid.addWidget(QLabel("Index"), 0, 0)
+        grid.addWidget(data_labels["Index"], 0, 1)
+        data_labels["Type"] = QLabel("N/A")
+        grid.addWidget(QLabel("Type"), 1, 0)
+        grid.addWidget(data_labels["Type"], 1, 1)
+        data_labels["Length"] = QLabel("N/A")
+        grid.addWidget(QLabel("Length"), 2, 0)
+        grid.addWidget(data_labels["Length"], 2, 1)
+        data_labels["PassMethod"] = QLabel("N/A")
+        grid.addWidget(data_labels["PassMethod"], 3, 1)
+        grid.addWidget(QLabel("PassMethod"), 3, 0)
+        data_labels["SetPoint"] = (QLabel("Set Point Field"), QLabel("N/A"))
+        grid.addWidget(data_labels["SetPoint"][1], 5, 1)
+        grid.addWidget(data_labels["SetPoint"][0], 5, 0)
+        self.setLayout(grid)
+        return data_labels
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().text().isdigit():
+            event.accept()
+        else:  # Reject all but positive integers.
+            event.ignore()
+
+    def dropEvent(self, event):
+        element = self.lattice[int(event.mimeData().text()) - 1]
+        self.dl["Index"].setText(event.mimeData().text())
+        self.dl["Type"].setText(element.Class)
+        self.dl["Length"].setText(str(element.Length))
+        self.dl["PassMethod"].setText(element.PassMethod)
+        if isinstance(element, at.elements.Bend):
+            self.dl["SetPoint"][0].setText("BendingAngle")
+            self.dl["SetPoint"][1].setText(str(element.BendingAngle))
+        elif isinstance(element, at.elements.Corrector):
+            self.dl["SetPoint"][0].setText("KickAngle")
+            self.dl["SetPoint"][1].setText(str(element.KickAngle))
+        elif isinstance(element, at.elements.Sextupole):
+            self.dl["SetPoint"][0].setText("H")
+            self.dl["SetPoint"][1].setText(str(element.H))
+        elif isinstance(element, at.elements.Quadrupole):
+            self.dl["SetPoint"][0].setText("K")
+            self.dl["SetPoint"][1].setText(str(element.K))
+        else:  # Drift or unsupported type.
+            pass
+        event.accept()
 
 
 if __name__ == '__main__':
