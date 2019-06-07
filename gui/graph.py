@@ -18,9 +18,9 @@ import math
 class Window(QMainWindow):
     def __init__(self, parent=None):
         super(Window, self).__init__(parent)
-        lattice = e.loader()
-        self.lattice = e.get_sim_ring(lattice)
-        self._atsim = e.get_atsim(lattice)
+        pytac_lattice = e.loader()
+        self.lattice = e.get_sim_ring(pytac_lattice)
+        self._atsim = e.get_atsim(pytac_lattice)
         self.s_selection = None
         self.total_len = sum([elem.Length for elem in self.lattice])
         self.n = 1
@@ -46,13 +46,15 @@ class Window(QMainWindow):
         self.canvas.mpl_connect('button_press_event', self.graph_onclick)
         self.plot()
         self.canvas.setMinimumWidth(1000)
+        self.canvas.setMaximumWidth(1000)
         self.canvas.setMinimumHeight(480)
         self.canvas.setMaximumHeight(480)
         self.graph_width = 1000
+        self.graph_height = 480
         self.figure.set_tight_layout({"pad": 0.5, "w_pad": 0, "h_pad": 0})
         graph.addWidget(self.canvas)
+        graph.setStretchFactor(self.canvas, 0)
         self.left_side.addLayout(graph)
-        # data3.setToolTip("m")
         # border-bottom-width:1px;border-bottom-style:solid; border-radius:0px
 
         # create lattice representation bar
@@ -75,7 +77,6 @@ class Window(QMainWindow):
         bottom.addWidget(edit_box(self.lattice))
         bottom.addWidget(edit_box(self.lattice))
         self.left_side.addLayout(bottom)
-        self.left_side.addStretch()
 
         # all components now set add to main layout
         layout.addLayout(self.left_side)
@@ -270,24 +271,28 @@ class Window(QMainWindow):
             else:
                 self.s_selection = None
             self.canvas.draw()
-            self.resize_graph(self.graph_width, True)
         """
         print('%s click: button=%d, x=%d, y=%d, xdata=%f, ydata=%f' %
               ('double' if event.dblclick else 'single', event.button,
                event.x, event.y, event.xdata, event.ydata))
         """
 
-    def resize_graph(self, width, redraw=False):
-        if (int(width) != int(self.graph_width)) or redraw:
-            # dpi = self.figure.dpi
+    def resize_graph(self, width, height, redraw=False):
+        if not redraw:
+            redraw = bool((int(width) != int(self.graph_width)) or
+                          (int(height) != int(self.graph_height)))
+        if redraw:
             self.canvas.flush_events()
-            # self.figure.set_size_inches(width/dpi, 480/dpi, forward=True)
-            self.canvas.resize(width, 480)
-            self.graph_width = width
+            self.canvas.setMaximumWidth(int(width))
+            self.canvas.setMaximumHeight(int(height))
+            self.canvas.resize(int(width), int(height))
+            self.graph_width = int(width)
+            self.graph_height = int(height)
 
     def resizeEvent(self, event):
         width = int(max([self.frameGeometry().width() - 500, 1000]))
-        self.resize_graph(width)
+        height = int(max([self.frameGeometry().height() - 350, 480]))
+        self.resize_graph(width, height)
         widths = self.calc_new_width(width - 125)
         for el, w in zip(self.lat_repr, widths):
             el.changeSize(w)
@@ -328,7 +333,7 @@ class edit_box(QGroupBox):
     def __init__(self, lattice):
         super().__init__()
         self.lattice = lattice
-        self.setMaximumSize(300, 200)
+        self.setMaximumSize(350, 200)
         self.setAcceptDrops(True)
         self.dl = self.create_box()
 
@@ -344,19 +349,22 @@ class edit_box(QGroupBox):
         data_labels["Type"] = QLabel("N/A")
         grid.addWidget(QLabel("Type"), 1, 0)
         grid.addWidget(data_labels["Type"], 1, 1)
-        data_labels["Length"] = QLineEdit("")
+        data_labels["Length"] = QLineEdit("N/A")
         data_labels["Length"].setAcceptDrops(False)
         data_labels["Length"].setValidator(float_validator)
+        data_labels["Length"].editingFinished.connect(self.enterPress)
         grid.addWidget(QLabel("Length"), 2, 0)
         grid.addWidget(data_labels["Length"], 2, 1)
-        data_labels["PassMethod"] = QLineEdit("")
+        data_labels["PassMethod"] = QLineEdit("N/A")
         data_labels["PassMethod"].setAcceptDrops(False)
         data_labels["PassMethod"].setValidator(pass_validator)
+        data_labels["PassMethod"].editingFinished.connect(self.enterPress)
         grid.addWidget(data_labels["PassMethod"], 3, 1)
         grid.addWidget(QLabel("PassMethod"), 3, 0)
         data_labels["SetPoint"] = (QLabel("Set Point"), QLineEdit("N/A"))
         data_labels["SetPoint"][1].setAcceptDrops(False)
         data_labels["SetPoint"][1].setValidator(float_validator)
+        data_labels["SetPoint"][1].editingFinished.connect(self.enterPress)
         grid.addWidget(data_labels["SetPoint"][1], 5, 1)
         grid.addWidget(data_labels["SetPoint"][0], 5, 0)
         self.setLayout(grid)
@@ -372,27 +380,43 @@ class edit_box(QGroupBox):
         element = self.lattice[int(event.mimeData().text()) - 1]
         self.dl["Index"].setText(event.mimeData().text())
         self.dl["Type"].setText(element.Class)
-        self.dl["Length"].setText(str(element.Length))
+        self.dl["Length"].setText(str(round(element.Length, 5)))
         self.dl["PassMethod"].setText(element.PassMethod)
-        if isinstance(element, at.elements.Drift):
-            self.dl["SetPoint"][0].setText("Set Point Field")
-            self.dl["SetPoint"][1].setText("N/A")
-        elif isinstance(element, at.elements.Bend):
+        if isinstance(element, at.elements.Bend):
             self.dl["SetPoint"][0].setText("BendingAngle")
-            self.dl["SetPoint"][1].setText(str(element.BendingAngle))
+            self.dl["SetPoint"][1].setText(str(round(element.BendingAngle, 5)))
         elif isinstance(element, at.elements.Corrector):
             self.dl["SetPoint"][0].setText("KickAngle")
-            self.dl["SetPoint"][1].setText(str(element.KickAngle))
+            self.dl["SetPoint"][1].setText(str(round(element.KickAngle, 5)))
         elif isinstance(element, at.elements.Sextupole):
             self.dl["SetPoint"][0].setText("H")
-            self.dl["SetPoint"][1].setText(str(element.H))
+            self.dl["SetPoint"][1].setText(str(round(element.H, 5)))
         elif isinstance(element, at.elements.Quadrupole):
             self.dl["SetPoint"][0].setText("K")
-            self.dl["SetPoint"][1].setText(str(element.K))
+            self.dl["SetPoint"][1].setText(str(round(element.K, 5)))
         else:  # Drift or unsupported type.
-            pass
+            self.dl["SetPoint"][0].setText("Set Point")
+            self.dl["SetPoint"][1].setText("N/A")
         event.accept()
 
+    def enterPress(self):
+        element = self.lattice[int(self.dl["Index"].text()) - 1]
+        if round(element.Length, 5) != float(self.dl["Length"].text()):
+            element.Length = float(self.dl["Length"].text())
+        elif element.PassMethod != self.dl["PassMethod"].text():
+            element.PassMethod = self.dl["PassMethod"].text()
+        elif self.dl["SetPoint"][0].text() == "BendingAngle":
+            if round(element.BendingAngle, 5) != float(self.dl["SetPoint"][1].text()):
+                element.BendingAngle = float(self.dl["SetPoint"][1].text())
+        elif self.dl["SetPoint"][0].text() == "KickAngle":
+            if round(element.KickAngle, 5) != float(self.dl["SetPoint"][1].text()):
+                element.KickAngle = float(self.dl["SetPoint"][1].text())
+        elif self.dl["SetPoint"][0].text() == "H":
+            if round(element.H, 5) != float(self.dl["SetPoint"][1].text()):
+                element.H = float(self.dl["SetPoint"][1].text())
+        elif self.dl["SetPoint"][0].text() == "K":
+            if round(element.K, 5) != float(self.dl["SetPoint"][1].text()):
+                element.K = float(self.dl["SetPoint"][1].text())
 
 class PassMethodValidator(QValidator):
     def __init__(self):
@@ -402,7 +426,7 @@ class PassMethodValidator(QValidator):
         if (len(string) > 0) and (not string.isalnum()):
             return (QValidator.Invalid, string, pos)
         elif string.endswith("Pass"):
-            file_name = at.load.utils.get_file_name(string)
+            file_name = at.load.utils.get_pass_method_file_name(string)
             file_path = os.path.join(at.integrators.__path__[0], file_name)
             if os.path.isfile(os.path.realpath(file_path)):
                 return (QValidator.Acceptable, string, pos)

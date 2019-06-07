@@ -25,7 +25,7 @@ class Window(QMainWindow):
 class element_repr(QWidget):
     def __init__(self, width, colour):
         super().__init__()
-        self.setMinimumHeight(100)
+        self.setMinimumHeight(480)
         self.setMinimumWidth(width)
         self.width = width
         self.colour = colour
@@ -35,7 +35,7 @@ class element_repr(QWidget):
         qp = QPainter(self)
         qp.setPen(self.colour)
         qp.setBrush(self.colour)
-        qp.drawRect(0, 0, self.width, 100)
+        qp.drawRect(0, 0, self.width, 350)
 
 
 if __name__ == '__main__':
