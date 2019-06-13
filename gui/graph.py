@@ -11,16 +11,16 @@ import at
 import at.plot
 import numpy
 from collections import OrderedDict
-import atip.ease as e
+import atip
 import math
 
 
 class Window(QMainWindow):
     def __init__(self, parent=None):
         super(Window, self).__init__(parent)
-        pytac_lattice = e.loader()
-        self.lattice = e.get_sim_ring(pytac_lattice)
-        self._atsim = e.get_atsim(pytac_lattice)
+        self.pytac_lattice = atip.utils.loader()
+        self.lattice = atip.utils.get_sim_lattice(self.pytac_lattice)
+        self._atsim = atip.utils.get_atsim(self.pytac_lattice)
         self.s_selection = None
         self.total_len = sum([elem.Length for elem in self.lattice])
         self.n = 1
@@ -55,34 +55,58 @@ class Window(QMainWindow):
         graph.addWidget(self.canvas)
         graph.setStretchFactor(self.canvas, 0)
         self.left_side.addLayout(graph)
-        # border-bottom-width:1px;border-bottom-style:solid; border-radius:0px
 
         # create lattice representation bar
+        self.full_disp = QVBoxLayout()
+        self.full_disp.setSpacing(0)
         self.lat_disp = QHBoxLayout()
         self.lat_disp.setSpacing(0)
         self.lat_disp.setContentsMargins(QMargins(0, 0, 0, 0))
         self.lat_disp.addStretch()
-        self.lat_disp.addWidget(element_repr(-1, 1, Qt.black))
+        self.lat_disp.addWidget(element_repr(-1, Qt.black, 1, drag=False))
         self.lat_repr = self.create_lat_repr()
-        for el in self.lat_repr:
-            self.lat_disp.addWidget(el)
-        self.lat_disp.addWidget(element_repr(-1, 1, Qt.black))
+        for el_repr in self.lat_repr:
+            self.lat_disp.addWidget(el_repr)
+        self.lat_disp.addWidget(element_repr(-1, Qt.black, 1, drag=False))
         self.lat_disp.addStretch()
-        self.left_side.addLayout(self.lat_disp)
+        self.full_disp.addLayout(self.lat_disp)
+
+        # add black bar (dividing line)
+        self.black_bar = QHBoxLayout()
+        self.black_bar.addStretch()
+        self.mid_line = element_repr(-1, Qt.black, 1000, height=1, drag=False)
+        self.black_bar.addWidget(self.mid_line)
+        self.black_bar.addStretch()
+        self.full_disp.addLayout(self.black_bar)
+
+        # create zero length element representation bar
+        self.zl_disp = QHBoxLayout()
+        self.zl_disp.setSpacing(0)
+        self.zl_disp.addStretch()
+        self.zl_disp.addWidget(element_repr(-1, Qt.black, 1, drag=False))
+        self.zl_repr = self.calc_zero_len_repr(1000)
+        for el_repr in self.zl_repr:
+            self.zl_disp.addWidget(el_repr)
+        self.zl_disp.addWidget(element_repr(-1, Qt.black, 1, drag=False))
+        self.zl_disp.addStretch()
+        self.full_disp.addLayout(self.zl_disp)
+        self.left_side.addLayout(self.full_disp)
 
         # create elem editing boxes to drop to
         bottom = QHBoxLayout()
-        bottom.addWidget(edit_box(self.lattice))
-        bottom.addWidget(edit_box(self.lattice))
-        bottom.addWidget(edit_box(self.lattice))
-        bottom.addWidget(edit_box(self.lattice))
+        bottom.addWidget(edit_box(self, self.pytac_lattice))
+        bottom.addWidget(edit_box(self, self.pytac_lattice))
+        bottom.addWidget(edit_box(self, self.pytac_lattice))
+        bottom.addWidget(edit_box(self, self.pytac_lattice))
         self.left_side.addLayout(bottom)
 
         # all components now set add to main layout
         layout.addLayout(self.left_side)
 
         # create lattice and element data sidebar
-        sidebar = QGridLayout()
+        sidebar_border = QWidget()
+        sidebar_border.setStyleSheet(".QWidget {border-left: 1px solid black}")
+        sidebar = QGridLayout(sidebar_border)
         sidebar.setSpacing(10)
         self.lattice_data_widgets = {}
         if self.n is None:
@@ -91,7 +115,7 @@ class Window(QMainWindow):
             title = QLabel("Global Super Period Parameters:")
         title.setMaximumWidth(220)
         title.setMinimumWidth(220)
-        title.setStyleSheet("font-weight:bold; text-decoration:underline")
+        title.setStyleSheet("font-weight:bold; text-decoration:underline;")
         sidebar.addWidget(title, 0, 0)
         spacer = QLabel("")
         spacer.setMaximumWidth(220)
@@ -107,7 +131,7 @@ class Window(QMainWindow):
             row_count += 1
         self.element_data_widgets = {}
         title = QLabel("Selected Element Parameters:")
-        title.setStyleSheet("font-weight:bold; text-decoration:underline")
+        title.setStyleSheet("font-weight:bold; text-decoration:underline;")
         sidebar.addWidget(title, row_count, 0)
         row_count += 1
         for field, value in self.get_element_data(0).items():
@@ -119,7 +143,7 @@ class Window(QMainWindow):
         # Add units tool tips
         self.lattice_data_widgets["Total Length"].setToolTip("m")
         self.lattice_data_widgets["Horizontal Emittance"].setToolTip("pm")
-        self.lattice_data_widgets["Linear Dispersion Action"].setToolTip("m")
+        # self.lattice_data_widgets["Linear Dispersion Action"].setToolTip("m")
         self.lattice_data_widgets["Energy Loss per Turn"].setToolTip("eV")
         self.lattice_data_widgets["Damping Times"].setToolTip("msec")
         self.lattice_data_widgets["Total Bend Angle"].setToolTip("deg")
@@ -129,32 +153,42 @@ class Window(QMainWindow):
         self.element_data_widgets["Element Length"].setToolTip("m")
         self.element_data_widgets["Horizontal Linear Dispersion"].setToolTip("m")
         self.element_data_widgets["Beta Function"].setToolTip("m")
-        layout.addLayout(sidebar)
+        # layout.addLayout(sidebar)
+        layout.addWidget(sidebar_border)
 
         # set layout
         wid = QWidget(self)
         wid.setLayout(layout)
         self.setCentralWidget(wid)
-        self.setStyleSheet("background-color:white")
+        self.setStyleSheet("background-color:white;")
         self.show()
 
     def create_lat_repr(self):
         lat_repr = []
+        self.zero_length = []
         self.base_widths = []
-        for elem in self.lattice[:415]:
+        for elem in self.lattice[:self.lattice.i_range[-1]]:
             width = math.ceil(elem.Length)
-            if width != 0:
+            if width == 0:
+                if not (isinstance(elem, at.elements.Drift) or
+                        isinstance(elem, at.elements.Marker) or
+                        isinstance(elem, at.elements.Aperture)):
+                    # don't care about zero length drifts, markers or apertures
+                    self.zero_length.append(elem)
+            else:
                 self.base_widths.append(elem.Length)
                 if isinstance(elem, at.elements.Drift):
-                    elem_repr = element_repr(elem.Index, width, Qt.white)
+                    elem_repr = element_repr(elem.Index, Qt.white, width)
                 elif isinstance(elem, at.elements.Dipole):
-                    elem_repr = element_repr(elem.Index, width, Qt.green)
+                    elem_repr = element_repr(elem.Index, Qt.green, width)
                 elif isinstance(elem, at.elements.Quadrupole):
-                    elem_repr = element_repr(elem.Index, width, Qt.red)
+                    elem_repr = element_repr(elem.Index, Qt.red, width)
                 elif isinstance(elem, at.elements.Sextupole):
-                    elem_repr = element_repr(elem.Index, width, Qt.yellow)
+                    elem_repr = element_repr(elem.Index, Qt.yellow, width)
+                elif isinstance(elem, at.elements.Corrector):
+                    elem_repr = element_repr(elem.Index, Qt.blue, width)
                 else:
-                    elem_repr = element_repr(elem.Index, width, Qt.blue)
+                    elem_repr = element_repr(elem.Index, Qt.darkCyan, width)
                 lat_repr.append(elem_repr)
         return lat_repr
 
@@ -186,6 +220,50 @@ class Window(QMainWindow):
                 scaled_widths[index] = scaled_widths[index]+1
         return scaled_widths
 
+    def calc_zero_len_repr(self, width):
+        scale_factor = width / self.total_len
+        all_s = self._atsim.get_s()
+        positions = [0.0]
+        for elem in self.zero_length:
+            positions.append(all_s[elem.Index-1] * scale_factor)
+        zero_len_repr = []
+        for i in range(1, len(positions), 1):
+            gap_length = int(round(positions[i] - positions[i-1]))
+            zero_len_repr.append(element_repr(-1, Qt.white, gap_length,
+                                              drag=False))
+            elem = self.zero_length[i-1]
+            if isinstance(elem, at.elements.Monitor):
+                elem_repr = element_repr(elem.Index, Qt.magenta, 1, drag=False)
+            elif isinstance(elem, at.elements.RFCavity):
+                elem_repr = element_repr(elem.Index, Qt.cyan, 1, drag=False)
+            elif isinstance(elem, at.elements.Corrector):
+                elem_repr = element_repr(elem.Index, Qt.blue, 1, drag=False)
+            else:
+                elem_repr = element_repr(elem.Index, Qt.black, 1, drag=False)
+            zero_len_repr.append(elem_repr)
+        diff = int(sum([el_repr.width for el_repr in zero_len_repr]) - width)
+        if diff < 0:  # undershoot
+            # unless the last zero length element is very close to the end of
+            # the displayed section this should always occur.
+            zero_len_repr.append(element_repr(-1, Qt.white, abs(diff),
+                                              drag=False))
+        elif diff > 0:  # overshoot
+            # this should rarely occur
+            # add zero len elem_repr at the end to maintain consistent length
+            zero_len_repr.append(element_repr(-1, Qt.white, 0, drag=False))
+            while diff > 1:
+                for i in range(len(zero_len_repr)):
+                    el_repr = zero_len_repr[i]
+                    if el_repr.width > 1:
+                        el_repr.changeSize(el_repr.width - 1)
+                        diff -= 1
+                    if diff < 1:
+                        break
+        else:
+            # add zero len elem_repr at the end to maintain consistent length
+            zero_len_repr.append(element_repr(-1, Qt.white, 0, drag=False))
+        return zero_len_repr
+
     def get_lattice_data(self):
         data_dict = OrderedDict()
         data_dict["Number of Elements"] = len(self.lattice.i_range)
@@ -195,12 +273,24 @@ class Window(QMainWindow):
         data_dict["Linear Chromaticity"] = [self._atsim.get_chrom(0),
                                             self._atsim.get_chrom(1)]
         data_dict["Horizontal Emittance"] = self._atsim.get_emit(0) * 1e12
-        data_dict["Linear Dispersion Action"] = 0.0
-        data_dict["Momentum Spread"] = 0.0
+        # data_dict["Linear Dispersion Action"] = 0.0
+        """Ignore for now as it is complex to calculate and not particularly
+        significant. The Linear Dispersion Action (curly H x) of an element
+        can be calculated from its linear optics parameters:
+            (curly H)x = (gamma x) * (dispersion x)^2
+                         + 2(alpha x) * (dispersion x) * (dispersion px)
+                         + (beta x) * (dispersion px)^2
+        The Linear Dispersion Action for the whole lattice could then be
+        calculated by integrating through the Linear Dispersion Action at each
+        element. It can also be derived, for the whole lattice, from the
+        Synchrotron/Radiation Integrals; however, these cannot currently be
+        calculated in pyAT.
+        """
+        data_dict["Momentum Spread"] = self._atsim.get_energy_spread()
         data_dict["Linear Momentum Compaction"] = self._atsim.get_mcf()
         data_dict["Energy Loss per Turn"] = self._atsim.get_energy_loss()
         data_dict["Damping Times"] = self._atsim.get_damping_times() * 1e3
-        data_dict["Damping Partition Numbers"] = [0, 0, 0]
+        data_dict["Damping Partition Numbers"] = self._atsim.get_damping_partition_numbers()
         data_dict["Total Bend Angle"] = self._atsim.get_total_bend_angle()
         data_dict["Total Absolute Bend Angle"] = self._atsim.get_total_absolute_bend_angle()
         return data_dict
@@ -289,50 +379,78 @@ class Window(QMainWindow):
             self.graph_width = int(width)
             self.graph_height = int(height)
 
+    def refresh_all(self):
+        self.plot()
+        self.update_lattice_data()
+        s_pos = self.element_data_widgets["Selected S Position"].text()
+        if s_pos != "N/A":
+            self.s_selection.remove()
+            self.s_selection = self.axl.axvline(s_pos, color="black",
+                                                linestyle='--', zorder=3)
+            self.update_element_data(float(s_pos))
+            self.canvas.draw()
+        self.resizeEvent(None)
+
     def resizeEvent(self, event):
         width = int(max([self.frameGeometry().width() - 500, 1000]))
         height = int(max([self.frameGeometry().height() - 350, 480]))
         self.resize_graph(width, height)
         widths = self.calc_new_width(width - 125)
-        for el, w in zip(self.lat_repr, widths):
-            el.changeSize(w)
-        super().resizeEvent(event)
+        for el_repr, w in zip(self.lat_repr, widths):
+            if w != el_repr.width:
+                el_repr.changeSize(w)
+        self.mid_line.changeSize(width - 123)
+        zlr = self.calc_zero_len_repr(width - 125)
+        zl_widths = [el_repr.width for el_repr in zlr]
+        for el_repr, w in zip(self.zl_repr, zl_widths):
+            el_repr.changeSize(w)
+        if event is not None:
+            super().resizeEvent(event)
 
 
 class element_repr(QWidget):
-    def __init__(self, index, width, colour):
+    def __init__(self, index, colour, width, height=50, drag=True):
         super().__init__()
         self.index = index
-        self.width = width
         self.colour = colour
-        self.setMinimumHeight(100)
+        self.width = width
+        self.height = height
+        self.draggable = drag
+        self.setMinimumHeight(height)
         self.setMinimumWidth(width)
 
     def paintEvent(self, event):
         qp = QPainter(self)
         qp.setPen(self.colour)
         qp.setBrush(self.colour)
-        qp.drawRect(0, 0, self.width, 100)
+        qp.drawRect(0, 0, self.width, self.height)
 
     def changeSize(self, width, height=None):
         self.width = width
         self.setMinimumWidth(width)
+        if height is not None:
+            self.height = height
+            self.setMinimumHeight(height)
         self.repaint()
 
     def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.LeftButton:
-            mimeData = QMimeData()
-            mimeData.setText(str(self.index))
-            drag = QDrag(self)
-            drag.setMimeData(mimeData)
-            drag.exec(Qt.MoveAction)  # dropAction =
+        if self.draggable:
+            if event.buttons() == Qt.LeftButton:
+                mimeData = QMimeData()
+                mimeData.setText(str(self.index))
+                drag = QDrag(self)
+                drag.setMimeData(mimeData)
+                drag.exec(Qt.MoveAction)  # dropAction =
         return
 
 
 class edit_box(QGroupBox):
-    def __init__(self, lattice):
+    def __init__(self, window, pytac_lattice):
         super().__init__()
-        self.lattice = lattice
+        self.parent_window = window
+        self.pytac_lattice = pytac_lattice
+        self.lattice = atip.utils.get_sim_lattice(pytac_lattice)
+        self._atsim = atip.utils.get_atsim(pytac_lattice)
         self.setMaximumSize(350, 200)
         self.setAcceptDrops(True)
         self.dl = self.create_box()
@@ -344,6 +462,7 @@ class edit_box(QGroupBox):
         float_validator.setNotation(QDoubleValidator.StandardNotation)
         pass_validator = PassMethodValidator()
         data_labels["Index"] = QLabel("N/A")
+        data_labels["Index"].setStyleSheet("background-color:white;")
         grid.addWidget(QLabel("Index"), 0, 0)
         grid.addWidget(data_labels["Index"], 0, 1)
         data_labels["Type"] = QLabel("N/A")
@@ -400,23 +519,41 @@ class edit_box(QGroupBox):
         event.accept()
 
     def enterPress(self):
+        change = True
         element = self.lattice[int(self.dl["Index"].text()) - 1]
         if round(element.Length, 5) != float(self.dl["Length"].text()):
-            element.Length = float(self.dl["Length"].text())
+            length = float(self.dl["Length"].text())
+            element.Length = length
+            self.pytac_lattice[element.Index - 1].length = length
         elif element.PassMethod != self.dl["PassMethod"].text():
             element.PassMethod = self.dl["PassMethod"].text()
         elif self.dl["SetPoint"][0].text() == "BendingAngle":
             if round(element.BendingAngle, 5) != float(self.dl["SetPoint"][1].text()):
                 element.BendingAngle = float(self.dl["SetPoint"][1].text())
+            else:
+                change = False
         elif self.dl["SetPoint"][0].text() == "KickAngle":
             if round(element.KickAngle, 5) != float(self.dl["SetPoint"][1].text()):
                 element.KickAngle = float(self.dl["SetPoint"][1].text())
+            else:
+                change = False
         elif self.dl["SetPoint"][0].text() == "H":
             if round(element.H, 5) != float(self.dl["SetPoint"][1].text()):
                 element.H = float(self.dl["SetPoint"][1].text())
+            else:
+                change = False
         elif self.dl["SetPoint"][0].text() == "K":
             if round(element.K, 5) != float(self.dl["SetPoint"][1].text()):
                 element.K = float(self.dl["SetPoint"][1].text())
+            else:
+                change = False
+        else:
+            change = False
+        if change:
+            atip.utils.trigger_calc(self.pytac_lattice)
+            self._atsim.wait_for_calculations()
+            self.parent_window.refresh_all()
+
 
 class PassMethodValidator(QValidator):
     def __init__(self):
