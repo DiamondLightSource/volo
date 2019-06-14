@@ -268,11 +268,11 @@ class Window(QMainWindow):
         data_dict = OrderedDict()
         data_dict["Number of Elements"] = len(self.lattice.i_range)
         data_dict["Total Length"] = self.total_len
-        data_dict["Cell Tune"] = [self._atsim.get_tune(0),
-                                  self._atsim.get_tune(1)]
-        data_dict["Linear Chromaticity"] = [self._atsim.get_chrom(0),
-                                            self._atsim.get_chrom(1)]
-        data_dict["Horizontal Emittance"] = self._atsim.get_emit(0) * 1e12
+        data_dict["Cell Tune"] = [self._atsim.get_tune('x'),
+                                  self._atsim.get_tune('y')]
+        data_dict["Linear Chromaticity"] = [self._atsim.get_chrom('x'),
+                                            self._atsim.get_chrom('y')]
+        data_dict["Horizontal Emittance"] = self._atsim.get_emit('x') * 1e12
         # data_dict["Linear Dispersion Action"] = 0.0
         """Ignore for now as it is complex to calculate and not particularly
         significant. The Linear Dispersion Action (curly H x) of an element
@@ -352,14 +352,14 @@ class Window(QMainWindow):
         if event.xdata is not None:
             if self.s_selection is not None:
                 self.s_selection.remove()
-                for lab in self.element_data_widgets.values():
-                    lab.setText("N/A")
             if event.button == 1:
                 self.s_selection = self.axl.axvline(event.xdata, color="black",
                                                     linestyle='--', zorder=3)
                 self.update_element_data(event.xdata)
             else:
                 self.s_selection = None
+                for lab in self.element_data_widgets.values():
+                    lab.setText("N/A")
             self.canvas.draw()
         """
         print('%s click: button=%d, x=%d, y=%d, xdata=%f, ydata=%f' %
@@ -381,15 +381,15 @@ class Window(QMainWindow):
 
     def refresh_all(self):
         self.plot()
+        self.resizeEvent(None)
         self.update_lattice_data()
         s_pos = self.element_data_widgets["Selected S Position"].text()
         if s_pos != "N/A":
-            self.s_selection.remove()
-            self.s_selection = self.axl.axvline(s_pos, color="black",
-                                                linestyle='--', zorder=3)
             self.update_element_data(float(s_pos))
+            self.s_selection.remove()
+            self.s_selection = self.axl.axvline(float(s_pos), color="black",
+                                                linestyle='--', zorder=3)
             self.canvas.draw()
-        self.resizeEvent(None)
 
     def resizeEvent(self, event):
         width = int(max([self.frameGeometry().width() - 500, 1000]))
