@@ -4,11 +4,13 @@ from scipy.optimize import least_squares
 
 
 class Variables(object):
-    def __init__(self, fields, indices, values):
+    def __init__(self, fields, indices, values, lower_bounds=None,
+                 upper_bounds=None):
         """Variable fields should either be a field name as a string e.g.
         'Length' or a field name(string) and a cell(int) e.g. ['PolynomB', 2].
         To change mutiple fields on the same element, multiple field index
         pairs must be passed.
+        Values need to be in phys units!
         """
         if (len(fields) != len(indices)) or (len(fields) != len(values)):
             raise IndexError("Length mismatch: Lengths of fields ({0}), "
@@ -17,6 +19,19 @@ class Variables(object):
         self.fields = fields
         self.indices = indices
         self.initial_values = values
+        if lower_bounds is not None:
+            if len(indices) != len(lower_bounds):
+                raise IndexError("Length mismatch: List of lower bounds must "
+                                 "be the same length as indicies.")
+        else:
+            lower_bounds = -numpy.inf
+        if upper_bounds is not None:
+            if len(indices) != len(upper_bounds):
+                raise IndexError("Length mismatch: List of upper bounds must "
+                                 "be the same length as indicies.")
+        else:
+            upper_bounds = numpy.inf
+        self.bounds = numpy.array([lower_bounds, upper_bounds])
 
 
 class Constraints(object):
@@ -29,6 +44,7 @@ class Constraints(object):
         desired_values is a list of the corresponding goal values for that
         field at refpts.
         """
+        # add a check that refpts and desired_values are the same length
         self.lattice = lattice
         self.weightings = weights
         self.desired_constraints = constraints
@@ -121,8 +137,16 @@ class Optimizer(object):
         # create variables and constraints objects
         self.cons = c
         self.vars = v
+        print("Number of variables: {0}\nNumber of constraints: {1}"
+              .format(len(self.vars.initial_values),
+                      len(list(self.cons.desired_constraints.values())[0])))
 
-    def run(self, max_iters=None, verbosity=0):
-        least_squares(self.cons.merit_function, self.vars.initial_values,
-                      max_nfev=max_iters, verbose=verbosity, args=([self.vars]))
+    def run(self, max_iters=None, verbosity=0, ftol=1e-8, xtol=1e-8,
+            gtol=1e-8):
+        # add return type option (lattice) or list of variable values
+        ls = least_squares(self.cons.merit_function, self.vars.initial_values,
+                           bounds=self.vars.bounds, ftol=ftol, xtol=xtol,
+                           gtol=gtol, max_nfev=max_iters, verbose=verbosity,
+                           args=([self.vars]))
+        #print(ls.x)
         return self.cons.lattice
