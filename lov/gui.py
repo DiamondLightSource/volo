@@ -1,22 +1,27 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGroupBox, QWidget
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QGridLayout
-from PyQt5.QtWidgets import QSpacerItem, QLineEdit
-from PyQt5.QtGui import QPainter, QDrag, QDoubleValidator, QValidator
-from PyQt5.QtCore import Qt, QMargins, QMimeData
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 import os
 import sys
+from collections import OrderedDict
+
 import at
 import at.plot
-import numpy
-from collections import OrderedDict
 import atip
 import math
+import numpy
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
+from PyQt5.QtCore import Qt, QMargins, QMimeData
+from PyQt5.QtGui import QPainter, QDrag, QDoubleValidator, QValidator
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QGroupBox, QWidget,
+                             QVBoxLayout, QHBoxLayout, QLabel, QGridLayout,
+                             QLineEdit)
 
 
 class Window(QMainWindow):
+    """Class for the whole window.
+    """
     def __init__(self, parent=None):
+        """Load and initialise the lattices.
+        """
         super(Window, self).__init__(parent)
         self.pytac_lattice = atip.utils.loader()
         self.lattice = atip.utils.get_sim_lattice(self.pytac_lattice)
@@ -32,17 +37,20 @@ class Window(QMainWindow):
         self.initUI()
 
     def initUI(self):
+        """Low level UI building of the core sections and their components.
+        """
+        # Set initial window size in pixels
         self.setGeometry(0, 0, 1500, 800)
-        # initialise layouts
+        # Initialise layouts
         layout = QHBoxLayout()
         layout.setSpacing(20)
         self.left_side = QVBoxLayout()
         self.left_side.setAlignment(Qt.AlignLeft)
 
-        # create graph
+        # Create graph
         graph = QHBoxLayout()
         self.figure = Figure()
-        self.canvas = FigureCanvas(self.figure)
+        self.canvas = FigureCanvasQTAgg(self.figure)
         self.canvas.mpl_connect('button_press_event', self.graph_onclick)
         self.plot()
         self.canvas.setMinimumWidth(1000)
@@ -56,7 +64,7 @@ class Window(QMainWindow):
         graph.setStretchFactor(self.canvas, 0)
         self.left_side.addLayout(graph)
 
-        # create lattice representation bar
+        # Create lattice representation bar
         self.full_disp = QVBoxLayout()
         self.full_disp.setSpacing(0)
         self.lat_disp = QHBoxLayout()
@@ -71,7 +79,7 @@ class Window(QMainWindow):
         self.lat_disp.addStretch()
         self.full_disp.addLayout(self.lat_disp)
 
-        # add black bar (dividing line)
+        # Add horizontal dividing line
         self.black_bar = QHBoxLayout()
         self.black_bar.addStretch()
         self.mid_line = element_repr(-1, Qt.black, 1000, height=1, drag=False)
@@ -79,7 +87,7 @@ class Window(QMainWindow):
         self.black_bar.addStretch()
         self.full_disp.addLayout(self.black_bar)
 
-        # create zero length element representation bar
+        # Create zero length element representation bar
         self.zl_disp = QHBoxLayout()
         self.zl_disp.setSpacing(0)
         self.zl_disp.addStretch()
@@ -92,7 +100,7 @@ class Window(QMainWindow):
         self.full_disp.addLayout(self.zl_disp)
         self.left_side.addLayout(self.full_disp)
 
-        # create elem editing boxes to drop to
+        # Create elem editing boxes to drop to
         bottom = QHBoxLayout()
         bottom.addWidget(edit_box(self, self.pytac_lattice))
         bottom.addWidget(edit_box(self, self.pytac_lattice))
@@ -100,10 +108,10 @@ class Window(QMainWindow):
         bottom.addWidget(edit_box(self, self.pytac_lattice))
         self.left_side.addLayout(bottom)
 
-        # all components now set add to main layout
+        # All components now set, add them to main layout
         layout.addLayout(self.left_side)
 
-        # create lattice and element data sidebar
+        # Create lattice and element data sidebar
         sidebar_border = QWidget()
         sidebar_border.setStyleSheet(".QWidget {border-left: 1px solid black}")
         sidebar = QGridLayout(sidebar_border)
@@ -122,6 +130,7 @@ class Window(QMainWindow):
         spacer.setMinimumWidth(220)
         sidebar.addWidget(spacer, 0, 1)
         row_count = 1
+        # Create global fields
         for field, value in self.get_lattice_data().items():
             val_str = self.stringify(value)
             sidebar.addWidget(QLabel("{0}: ".format(field)), row_count, 0)
@@ -134,13 +143,14 @@ class Window(QMainWindow):
         title.setStyleSheet("font-weight:bold; text-decoration:underline;")
         sidebar.addWidget(title, row_count, 0)
         row_count += 1
+        # Create local fields
         for field, value in self.get_element_data(0).items():
             sidebar.addWidget(QLabel("{0}: ".format(field)), row_count, 0)
             lab = QLabel("N/A")
             sidebar.addWidget(lab, row_count, 1)
             self.element_data_widgets[field] = lab
             row_count += 1
-        # Add units tool tips
+        # Add units tool tips where applicable
         self.lattice_data_widgets["Total Length"].setToolTip("m")
         self.lattice_data_widgets["Horizontal Emittance"].setToolTip("pm")
         # self.lattice_data_widgets["Linear Dispersion Action"].setToolTip("m")
@@ -156,7 +166,7 @@ class Window(QMainWindow):
         # layout.addLayout(sidebar)
         layout.addWidget(sidebar_border)
 
-        # set layout
+        # Set layout
         wid = QWidget(self)
         wid.setLayout(layout)
         self.setCentralWidget(wid)
@@ -164,6 +174,10 @@ class Window(QMainWindow):
         self.show()
 
     def create_lat_repr(self):
+        """Create a list of element representations, in the order that they
+        appear in the lattice, colour coded according to their type.
+        See also: calc_zero_len_repr
+        """
         lat_repr = []
         self.zero_length = []
         self.base_widths = []
@@ -193,6 +207,10 @@ class Window(QMainWindow):
         return lat_repr
 
     def calc_new_width(self, new_width):
+        """Calculate the new widths of the element representations so that
+        they may be dynamically scaled to fit into the new window size, whilst
+        remaining roughly proportional to their lengths.
+        """
         scale_factor = new_width / sum(self.base_widths)
         scaled_widths = [width * scale_factor for width in self.base_widths]
         rounding = []
@@ -221,6 +239,11 @@ class Window(QMainWindow):
         return scaled_widths
 
     def calc_zero_len_repr(self, width):
+        """Create element representations for elements in the lattice with 0
+        length, to be displayed below the non-zero length element
+        representations.
+        See also: create_lat_repr
+        """
         scale_factor = width / self.total_len
         all_s = self._atsim.get_s()
         positions = [0.0]
@@ -265,6 +288,9 @@ class Window(QMainWindow):
         return zero_len_repr
 
     def get_lattice_data(self):
+        """Calculate the global linear optics data for the lattice, and return
+        it in a dictionary by its field names.
+        """
         data_dict = OrderedDict()
         data_dict["Number of Elements"] = len(self.lattice.i_range)
         data_dict["Total Length"] = self.total_len
@@ -274,12 +300,12 @@ class Window(QMainWindow):
                                             self._atsim.get_chrom('y')]
         data_dict["Horizontal Emittance"] = self._atsim.get_emit('x') * 1e12
         # data_dict["Linear Dispersion Action"] = 0.0
-        """Ignore for now as it is complex to calculate and not particularly
-        significant. The Linear Dispersion Action (curly H x) of an element
-        can be calculated from its linear optics parameters:
-            (curly H)x = (gamma x) * (dispersion x)^2
-                         + 2(alpha x) * (dispersion x) * (dispersion px)
-                         + (beta x) * (dispersion px)^2
+        """Ignore the Linear Dispersion Action (curly-H x) for now as it's
+        complex to calculate and not particularly significant. It can be
+        calculated for an element from the elements linear optics parameters:
+            (curly-H x) = (gamma x) * (dispersion x)^2
+                          + 2(alpha x) * (dispersion x) * (dispersion px)
+                          + (beta x) * (dispersion px)^2
         The Linear Dispersion Action for the whole lattice could then be
         calculated by integrating through the Linear Dispersion Action at each
         element. It can also be derived, for the whole lattice, from the
@@ -296,6 +322,10 @@ class Window(QMainWindow):
         return data_dict
 
     def get_element_data(self, selected_s_pos):
+        """Calculate the local (for the element at the selected s position)
+        linear optics data for the lattice, and return it in a dictionary by
+        its field names.
+        """
         data_dict = OrderedDict()
         all_s = self._atsim.get_s()
         index = int(numpy.where([s <= selected_s_pos for s in all_s])[0][-1])
@@ -310,6 +340,8 @@ class Window(QMainWindow):
         return data_dict
 
     def stringify(self, value):
+        """Convert numerical data into a string that can be displayed.
+        """
         v = []
         if numpy.issubdtype(type(value), numpy.number):
             value = [value]
@@ -329,16 +361,24 @@ class Window(QMainWindow):
             return "[" + ', '.join(v) + "]"
 
     def update_lattice_data(self):
+        """Iterate over the global linear optics data and update the values of
+        each field. Usually called after a change has been made to the lattice.
+        """
         for field, value in self.get_lattice_data().items():
             val_str = self.stringify(value)
             self.lattice_data_widgets[field].setText(val_str)
 
     def update_element_data(self, s_pos):
+        """Iterate over the local linear optics data and update the values of
+        each field. Usually called when a new s position selection is made.
+        """
         for field, value in self.get_element_data(s_pos).items():
             val_str = self.stringify(value)
             self.element_data_widgets[field].setText(val_str)
 
     def plot(self):
+        """Plot the graph inside the figure.
+        """
         self.lattice.radiation_off()
         self.figure.clear()
         self.axl = self.figure.add_subplot(111, xmargin=0, ymargin=0.025)
@@ -349,6 +389,10 @@ class Window(QMainWindow):
         self.canvas.draw()
 
     def graph_onclick(self, event):
+        """Left click to make an s position selection and display a black
+        dashed line at that position on the graph.
+        Right click to clear a selection.
+        """
         if event.xdata is not None:
             if self.s_selection is not None:
                 self.s_selection.remove()
@@ -368,6 +412,10 @@ class Window(QMainWindow):
         """
 
     def resize_graph(self, width, height, redraw=False):
+        """Resize the graph to a new width and(or) height; can also be used to
+        force a redraw of the graph, without resizing, by way of the redraw
+        argument.
+        """
         if not redraw:
             redraw = bool((int(width) != int(self.graph_width)) or
                           (int(height) != int(self.graph_height)))
@@ -380,6 +428,9 @@ class Window(QMainWindow):
             self.graph_height = int(height)
 
     def refresh_all(self):
+        """Refresh the graph, global linear optics data, and local linear
+        optics data.
+        """
         self.plot()
         self.resizeEvent(None)
         self.update_lattice_data()
@@ -392,6 +443,11 @@ class Window(QMainWindow):
             self.canvas.draw()
 
     def resizeEvent(self, event):
+        """Called when the window is resized; resizes the graph and lattice
+        representation accordingly for the new window size. N.B. the
+        hard-coded pixel offsets "just work^TM" for me, but may need to be
+        changed for alignment to work properly on a different machine.
+        """
         width = int(max([self.frameGeometry().width() - 500, 1000]))
         height = int(max([self.frameGeometry().height() - 350, 480]))
         self.resize_graph(width, height)
@@ -409,6 +465,8 @@ class Window(QMainWindow):
 
 
 class element_repr(QWidget):
+    """Class for creating the coloured element representation bars/boxes.
+    """
     def __init__(self, index, colour, width, height=50, drag=True):
         super().__init__()
         self.index = index
@@ -420,12 +478,17 @@ class element_repr(QWidget):
         self.setMinimumWidth(width)
 
     def paintEvent(self, event):
+        """Called on creation and resize(repaint).
+        """
         qp = QPainter(self)
         qp.setPen(self.colour)
         qp.setBrush(self.colour)
         qp.drawRect(0, 0, self.width, self.height)
 
     def changeSize(self, width, height=None):
+        """Called on resize; minimum width and height are set to prevent
+        stretching/squishing.
+        """
         self.width = width
         self.setMinimumWidth(width)
         if height is not None:
@@ -434,6 +497,8 @@ class element_repr(QWidget):
         self.repaint()
 
     def mouseMoveEvent(self, event):
+        """Allows drag and drop functionality, on left click and hold.
+        """
         if self.draggable:
             if event.buttons() == Qt.LeftButton:
                 mimeData = QMimeData()
@@ -445,6 +510,9 @@ class element_repr(QWidget):
 
 
 class edit_box(QGroupBox):
+    """Class for creating element editing boxes that element representations
+    can be dragged to to display information and be edited.
+    """
     def __init__(self, window, pytac_lattice):
         super().__init__()
         self.parent_window = window
@@ -456,46 +524,65 @@ class edit_box(QGroupBox):
         self.dl = self.create_box()
 
     def create_box(self):
+        """Create the field labels and input/display for a box.
+        """
         data_labels = {}
         grid = QGridLayout()
         float_validator = QDoubleValidator()
         float_validator.setNotation(QDoubleValidator.StandardNotation)
         pass_validator = PassMethodValidator()
+        index = QLabel("Index")
+        index.setStyleSheet("background-color:none;")
+        grid.addWidget(index, 0, 0)
         data_labels["Index"] = QLabel("N/A")
-        data_labels["Index"].setStyleSheet("background-color:white;")
-        grid.addWidget(QLabel("Index"), 0, 0)
+        data_labels["Index"].setStyleSheet("background-color:none;")
         grid.addWidget(data_labels["Index"], 0, 1)
+        type_ = QLabel("Type")
+        type_.setStyleSheet("background-color:none;")
+        grid.addWidget(type_, 1, 0)
         data_labels["Type"] = QLabel("N/A")
-        grid.addWidget(QLabel("Type"), 1, 0)
+        data_labels["Type"].setStyleSheet("background-color:none;")
         grid.addWidget(data_labels["Type"], 1, 1)
+        length = QLabel("Length")
+        length.setStyleSheet("background-color:none;")
+        grid.addWidget(length, 2, 0)
         data_labels["Length"] = QLineEdit("N/A")
         data_labels["Length"].setAcceptDrops(False)
         data_labels["Length"].setValidator(float_validator)
         data_labels["Length"].editingFinished.connect(self.enterPress)
-        grid.addWidget(QLabel("Length"), 2, 0)
         grid.addWidget(data_labels["Length"], 2, 1)
+        pass_meth = QLabel("PassMethod")
+        pass_meth.setStyleSheet("background-color:none;")
+        grid.addWidget(pass_meth, 3, 0)
         data_labels["PassMethod"] = QLineEdit("N/A")
         data_labels["PassMethod"].setAcceptDrops(False)
         data_labels["PassMethod"].setValidator(pass_validator)
         data_labels["PassMethod"].editingFinished.connect(self.enterPress)
         grid.addWidget(data_labels["PassMethod"], 3, 1)
-        grid.addWidget(QLabel("PassMethod"), 3, 0)
         data_labels["SetPoint"] = (QLabel("Set Point"), QLineEdit("N/A"))
+        data_labels["SetPoint"][0].setStyleSheet("background-color:none;")
+        grid.addWidget(data_labels["SetPoint"][0], 5, 0)
         data_labels["SetPoint"][1].setAcceptDrops(False)
         data_labels["SetPoint"][1].setValidator(float_validator)
         data_labels["SetPoint"][1].editingFinished.connect(self.enterPress)
         grid.addWidget(data_labels["SetPoint"][1], 5, 1)
-        grid.addWidget(data_labels["SetPoint"][0], 5, 0)
         self.setLayout(grid)
         return data_labels
 
     def dragEnterEvent(self, event):
+        """Receive the mime data of a dragged object, only accept if the
+        element index is a positive integer.
+        """
         if event.mimeData().text().isdigit():
             event.accept()
         else:  # Reject all but positive integers.
             event.ignore()
 
     def dropEvent(self, event):
+        """Accept all dropped objects as dragEnterEvent will already have
+        rejected all undesirables. On drop action update the edit box to
+        display the appropriate data for that element.
+        """
         element = self.lattice[int(event.mimeData().text()) - 1]
         self.dl["Index"].setText(event.mimeData().text())
         self.dl["Type"].setText(element.Class)
@@ -505,7 +592,7 @@ class edit_box(QGroupBox):
             self.dl["SetPoint"][0].setText("BendingAngle")
             self.dl["SetPoint"][1].setText(str(round(element.BendingAngle, 5)))
         elif isinstance(element, at.elements.Corrector):
-            self.dl["SetPoint"][0].setText("KickAngle")
+            self.dl["SetPoint"][0].setText("KickAngle")  # hella broken
             self.dl["SetPoint"][1].setText(str(round(element.KickAngle, 5)))
         elif isinstance(element, at.elements.Sextupole):
             self.dl["SetPoint"][0].setText("H")
@@ -519,6 +606,11 @@ class edit_box(QGroupBox):
         event.accept()
 
     def enterPress(self):
+        """On an enter press in an editable field, do some data processing and
+        then apply the change to the base lattice, then trigger a recalculation
+        of the linear optics data, then refresh the window to display the newly
+        calculated data.
+        """
         change = True
         element = self.lattice[int(self.dl["Index"].text()) - 1]
         if round(element.Length, 5) != float(self.dl["Length"].text()):
@@ -556,10 +648,15 @@ class edit_box(QGroupBox):
 
 
 class PassMethodValidator(QValidator):
+    """Check that a given PassMethod is valid.
+    """
     def __init__(self):
         super().__init__()
 
     def validate(self, string, pos):
+        """Check that it is a non-zero length string, ending in 'Pass' which
+        has a corresponding built file (e.g. DriftPass.so).
+        """
         if (len(string) > 0) and (not string.isalnum()):
             return (QValidator.Invalid, string, pos)
         elif string.endswith("Pass"):

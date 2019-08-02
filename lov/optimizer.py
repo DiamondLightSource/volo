@@ -65,16 +65,17 @@ class Constraints(object):
         dispersion ?is (4,)?
         """
         data_map = {
-            'tune_x':lindata[1][0], 'tune_y':lindata[1][1],
-            'chrom_x':lindata[2][0], 'chrom_y':lindata[2][1],
-            'alpha_x':lindata[3].alpha[:, 0], 'alpha_y':lindata[3].alpha[:, 1],
-            'beta_x':lindata[3].beta[:, 0], 'beta_y':lindata[3].beta[:, 1],
-            'mu_x':lindata[3].mu[:, 0], 'mu_y':lindata[3].mu[:, 1],
-            'x':lindata[3].closed_orbit[:, 0],
-            'px':lindata[3].closed_orbit[:, 1],
-            'y':lindata[3].closed_orbit[:, 2],
-            'py':lindata[3].closed_orbit[:, 3],
-            'dispersion':lindata[3].dispersion, 'gamma':lindata[3].gamma
+            'tune_x': lindata[1][0], 'tune_y': lindata[1][1],
+            'chrom_x': lindata[2][0], 'chrom_y': lindata[2][1],
+            'beta_x': lindata[3].beta[:, 0], 'beta_y': lindata[3].beta[:, 1],
+            'mu_x': lindata[3].mu[:, 0], 'mu_y': lindata[3].mu[:, 1],
+            'alpha_x': lindata[3].alpha[:, 0],
+            'alpha_y': lindata[3].alpha[:, 1],
+            'x': lindata[3].closed_orbit[:, 0],
+            'px': lindata[3].closed_orbit[:, 1],
+            'y': lindata[3].closed_orbit[:, 2],
+            'py': lindata[3].closed_orbit[:, 3],
+            'dispersion': lindata[3].dispersion, 'gamma': lindata[3].gamma
         }
         data = {}
         for key in self.desired_constraints.keys():
