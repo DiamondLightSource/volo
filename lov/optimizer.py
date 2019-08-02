@@ -52,33 +52,6 @@ class Constraints(object):
         for key in constraints.keys():
             self.refpts.update(constraints[key][0])
         self.refpts = list(self.refpts)
-        """
-        weights.get('tune_x', 0), weights.get('tune_y', 0),
-        weights.get('chrom_x', 0), weights.get('chrom_y', 0),
-        weights.get('alpha_x', 0), weights.get('alpha_y', 0),
-        weights.get('beta_x', 0), weights.get('beta_y', 0),
-        weights.get('mu_x', 0), weights.get('mu_y', 0),
-        weights.get('x', 0), weights.get('px', 0),
-        weights.get('y', 0), weights.get('py', 0),
-        weights.get('dispersion', 0), weights.get('gamma', 0)
-        self.desired_values = []
-        self.desired_values.extend(constraints.get('tune_x', [[],[]])[1])
-        self.desired_values.extend(constraints.get('tune_y', [[],[]])[1])
-        self.desired_values.extend(constraints.get('chrom_x', [[],[]])[1])
-        self.desired_values.extend(constraints.get('chrom_y', [[],[]])[1])
-        self.desired_values.extend(constraints.get('alpha_x', [[],[]])[1])
-        self.desired_values.extend(constraints.get('alpha_y', [[],[]])[1])
-        self.desired_values.extend(constraints.get('beta_x', [[],[]])[1])
-        self.desired_values.extend(constraints.get('beta_y', [[],[]])[1])
-        self.desired_values.extend(constraints.get('mu_x', [[],[]])[1])
-        self.desired_values.extend(constraints.get('mu_y', [[],[]])[1])
-        self.desired_values.extend(constraints.get('x', [[],[]])[1])
-        self.desired_values.extend(constraints.get('px',[[],[]])[1])
-        self.desired_values.extend(constraints.get('y', [[],[]])[1])
-        self.desired_values.extend(constraints.get('py',[[],[]])[1])
-        self.desired_values.extend(constraints.get('dispersion', [[],[]])[1])
-        self.desired_values.extend(constraints.get('gamma', [[],[]])[1])
-        """
 
     def calc_lindata(self):
         return at.linopt(self.lattice, refpts=self.refpts, get_chrom=True,
@@ -105,12 +78,14 @@ class Constraints(object):
         }
         data = {}
         for key in self.desired_constraints.keys():
-            if key in ['tune_x', 'tune_y', 'chrom_x', 'chrom_y']:
-                d = [data_map[key]]
+            if callable(key):
+                pass
+            elif key in ['tune_x', 'tune_y', 'chrom_x', 'chrom_y']:
+                data[key] = numpy.array([data_map[key]])  # global fields
             else:
-                d = [data_map[key][self.refpts.index(ref)] for ref
-                     in self.desired_constraints[key][0]]
-            data[key] = numpy.array(d)
+                data[key] = numpy.array([data_map[key][self.refpts.index(ref)]
+                                         for ref in
+                                         self.desired_constraints[key][0]])
         return data
 
     def make_changes(self, values, variables):
@@ -122,13 +97,21 @@ class Constraints(object):
                 cell = f[1]
                 vars(self.lattice[i])[field][cell] = v
 
-    def merit_function(self, values, variables):
+    def merit_function(self, values, variables, **kwargs):
         self.make_changes(values, variables)
-        constraints = self.convert_lindata(self.calc_lindata())
+        if not all([callable(key) for key in self.desired_constraints.keys()]):
+            constraints = self.convert_lindata(self.calc_lindata())
         residuals = []
         for key in self.desired_constraints.keys():
-            diff = constraints[key] - self.desired_constraints[key][1]
-            residuals.extend(diff * self.weightings[key])
+            if callable(key):
+                diff = key(self.lattice, self.desired_constraints[key][1],
+                           **kwargs)
+            else:
+                diff = constraints[key] - self.desired_constraints[key][1]
+            try:
+                residuals.extend(diff * self.weightings[key])  # array
+            except TypeError:
+                residuals.append(diff * self.weightings[key])  # scalar
         return residuals
 
 
@@ -142,11 +125,17 @@ class Optimizer(object):
                       len(list(self.cons.desired_constraints.values())[0])))
 
     def run(self, max_iters=None, verbosity=0, ftol=1e-8, xtol=1e-8,
-            gtol=1e-8):
+            gtol=1e-8, **kwargs):
         # add return type option (lattice) or list of variable values
         ls = least_squares(self.cons.merit_function, self.vars.initial_values,
                            bounds=self.vars.bounds, ftol=ftol, xtol=xtol,
                            gtol=gtol, max_nfev=max_iters, verbose=verbosity,
-                           args=([self.vars]))
+                           args=([self.vars]), kwargs=kwargs)
         #print(ls.x)
+        """
+        dat = self.cons.convert_lindata(self.cons.calc_lindata())
+        for con, val in self.cons.desired_constraints.items():
+            print("Constraint '{0}', goal: {1}, result {2}".format(con, val[1],
+                                                                   dat[con]))
+        """
         return self.cons.lattice
