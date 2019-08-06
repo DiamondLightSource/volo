@@ -23,10 +23,13 @@ class Window(QMainWindow):
         """Load and initialise the lattices.
         """
         super(Window, self).__init__(parent)
+        # Lattice loading
         self.pytac_lattice = atip.utils.loader()
         self.lattice = atip.utils.get_sim_lattice(self.pytac_lattice)
         self._atsim = atip.utils.get_atsim(self.pytac_lattice)
         self.s_selection = None
+
+        # Super-period support
         self.total_len = sum([elem.Length for elem in self.lattice])
         self.n = 1
         if self.n is not None:
@@ -34,6 +37,8 @@ class Window(QMainWindow):
             superperiod_bounds = superperiod_len * numpy.array(range(7))
             self.lattice.s_range = superperiod_bounds[self.n-1:self.n+1]
             self.total_len = self.lattice.s_range[1] - self.lattice.s_range[0]
+
+        # Create UI
         self.initUI()
 
     def initUI(self):
@@ -52,16 +57,18 @@ class Window(QMainWindow):
         self.figure = Figure()
         self.canvas = FigureCanvasQTAgg(self.figure)
         self.canvas.mpl_connect('button_press_event', self.graph_onclick)
+        self.figure.set_tight_layout({"pad": 0.5, "w_pad": 0, "h_pad": 0})
         self.plot()
+        # Make graph fixed size to prevent autoscaling
         self.canvas.setMinimumWidth(1000)
         self.canvas.setMaximumWidth(1000)
         self.canvas.setMinimumHeight(480)
         self.canvas.setMaximumHeight(480)
         self.graph_width = 1000
         self.graph_height = 480
-        self.figure.set_tight_layout({"pad": 0.5, "w_pad": 0, "h_pad": 0})
         graph.addWidget(self.canvas)
         graph.setStretchFactor(self.canvas, 0)
+        # Add graph to left side layout
         self.left_side.addLayout(graph)
 
         # Create lattice representation bar
@@ -70,90 +77,109 @@ class Window(QMainWindow):
         self.lat_disp = QHBoxLayout()
         self.lat_disp.setSpacing(0)
         self.lat_disp.setContentsMargins(QMargins(0, 0, 0, 0))
+        # Add a stretch at both ends to keep the lattice representation centred
         self.lat_disp.addStretch()
+        # Add startline
         self.lat_disp.addWidget(element_repr(-1, Qt.black, 1, drag=False))
+        # Add elements
         self.lat_repr = self.create_lat_repr()
         for el_repr in self.lat_repr:
             self.lat_disp.addWidget(el_repr)
+        # Add endline
         self.lat_disp.addWidget(element_repr(-1, Qt.black, 1, drag=False))
+        # Add a stretch at both ends to keep the lattice representation centred
         self.lat_disp.addStretch()
+        # Add non-zero length representation to lattice representation layout
         self.full_disp.addLayout(self.lat_disp)
 
         # Add horizontal dividing line
         self.black_bar = QHBoxLayout()
-        self.black_bar.addStretch()
+        self.black_bar.addStretch()  # Keep it centred
         self.mid_line = element_repr(-1, Qt.black, 1000, height=1, drag=False)
         self.black_bar.addWidget(self.mid_line)
-        self.black_bar.addStretch()
+        self.black_bar.addStretch()  # Keep it centred
         self.full_disp.addLayout(self.black_bar)
 
         # Create zero length element representation bar
         self.zl_disp = QHBoxLayout()
         self.zl_disp.setSpacing(0)
+        # Add a stretch at both ends to keep the lattice representation centred
         self.zl_disp.addStretch()
+        # Add startline
         self.zl_disp.addWidget(element_repr(-1, Qt.black, 1, drag=False))
+        # Add elements
         self.zl_repr = self.calc_zero_len_repr(1000)
         for el_repr in self.zl_repr:
             self.zl_disp.addWidget(el_repr)
+        # Add endline
         self.zl_disp.addWidget(element_repr(-1, Qt.black, 1, drag=False))
+        # Add a stretch at both ends to keep the lattice representation centred
         self.zl_disp.addStretch()
+        # Add zero length representation to lattice representation layout
         self.full_disp.addLayout(self.zl_disp)
+        # Add full lattice representation to left side layout
         self.left_side.addLayout(self.full_disp)
 
-        # Create elem editing boxes to drop to
+        # Create element editing boxes to drop to
         bottom = QHBoxLayout()
+        # Future possibility to auto determine number of boxes by window size
         bottom.addWidget(edit_box(self, self.pytac_lattice))
         bottom.addWidget(edit_box(self, self.pytac_lattice))
         bottom.addWidget(edit_box(self, self.pytac_lattice))
         bottom.addWidget(edit_box(self, self.pytac_lattice))
+        # Add edit boxes to left side layout
         self.left_side.addLayout(bottom)
 
-        # All components now set, add them to main layout
+        # All left side components now set, add them to main layout
         layout.addLayout(self.left_side)
 
         # Create lattice and element data sidebar
         sidebar_border = QWidget()
+        # Dividing line
         sidebar_border.setStyleSheet(".QWidget {border-left: 1px solid black}")
         sidebar = QGridLayout(sidebar_border)
         sidebar.setSpacing(10)
-        self.lattice_data_widgets = {}
+        # Determine correct global title
         if self.n is None:
             title = QLabel("Global Lattice Parameters:")
         else:
             title = QLabel("Global Super Period Parameters:")
+        # Ensure sidebar width remains fixed
         title.setMaximumWidth(220)
         title.setMinimumWidth(220)
         title.setStyleSheet("font-weight:bold; text-decoration:underline;")
         sidebar.addWidget(title, 0, 0)
+        # Ensure sidebar width remains fixed
         spacer = QLabel("")
         spacer.setMaximumWidth(220)
         spacer.setMinimumWidth(220)
         sidebar.addWidget(spacer, 0, 1)
-        row_count = 1
+        self.lattice_data_widgets = {}
+        row_count = 1  # start after global title row
         # Create global fields
         for field, value in self.get_lattice_data().items():
-            val_str = self.stringify(value)
             sidebar.addWidget(QLabel("{0}: ".format(field)), row_count, 0)
-            lab = QLabel(val_str)
+            lab = QLabel(self.stringify(value))
             sidebar.addWidget(lab, row_count, 1)
             self.lattice_data_widgets[field] = lab
             row_count += 1
-        self.element_data_widgets = {}
+        # Add element title
         title = QLabel("Selected Element Parameters:")
         title.setStyleSheet("font-weight:bold; text-decoration:underline;")
         sidebar.addWidget(title, row_count, 0)
-        row_count += 1
+        self.element_data_widgets = {}
+        row_count += 1  # continue after element title row
         # Create local fields
         for field, value in self.get_element_data(0).items():
             sidebar.addWidget(QLabel("{0}: ".format(field)), row_count, 0)
-            lab = QLabel("N/A")
+            lab = QLabel("N/A")  # default until s selection is made
             sidebar.addWidget(lab, row_count, 1)
             self.element_data_widgets[field] = lab
             row_count += 1
         # Add units tool tips where applicable
         self.lattice_data_widgets["Total Length"].setToolTip("m")
         self.lattice_data_widgets["Horizontal Emittance"].setToolTip("pm")
-        # self.lattice_data_widgets["Linear Dispersion Action"].setToolTip("m")
+        #self.lattice_data_widgets["Linear Dispersion Action"].setToolTip("m")
         self.lattice_data_widgets["Energy Loss per Turn"].setToolTip("eV")
         self.lattice_data_widgets["Damping Times"].setToolTip("msec")
         self.lattice_data_widgets["Total Bend Angle"].setToolTip("deg")
@@ -163,10 +189,10 @@ class Window(QMainWindow):
         self.element_data_widgets["Element Length"].setToolTip("m")
         self.element_data_widgets["Horizontal Linear Dispersion"].setToolTip("m")
         self.element_data_widgets["Beta Function"].setToolTip("m")
-        # layout.addLayout(sidebar)
+        # Add sidebar to main window layout
         layout.addWidget(sidebar_border)
 
-        # Set layout
+        # Set and display layout
         wid = QWidget(self)
         wid.setLayout(layout)
         self.setCentralWidget(wid)
@@ -202,7 +228,7 @@ class Window(QMainWindow):
                 elif isinstance(elem, at.elements.Corrector):
                     elem_repr = element_repr(elem.Index, Qt.blue, width)
                 else:
-                    elem_repr = element_repr(elem.Index, Qt.darkCyan, width)
+                    elem_repr = element_repr(elem.Index, Qt.gray, width)
                 lat_repr.append(elem_repr)
         return lat_repr
 
@@ -262,7 +288,7 @@ class Window(QMainWindow):
             elif isinstance(elem, at.elements.Corrector):
                 elem_repr = element_repr(elem.Index, Qt.blue, 1, drag=False)
             else:
-                elem_repr = element_repr(elem.Index, Qt.black, 1, drag=False)
+                elem_repr = element_repr(elem.Index, Qt.gray, 1, drag=False)
             zero_len_repr.append(elem_repr)
         diff = int(sum([el_repr.width for el_repr in zero_len_repr]) - width)
         if diff < 0:  # undershoot
@@ -294,12 +320,14 @@ class Window(QMainWindow):
         data_dict = OrderedDict()
         data_dict["Number of Elements"] = len(self.lattice.i_range)
         data_dict["Total Length"] = self.total_len
+        data_dict["Total Bend Angle"] = self._atsim.get_total_bend_angle()
+        data_dict["Total Absolute Bend Angle"] = self._atsim.get_total_absolute_bend_angle()
         data_dict["Cell Tune"] = [self._atsim.get_tune('x'),
                                   self._atsim.get_tune('y')]
         data_dict["Linear Chromaticity"] = [self._atsim.get_chrom('x'),
                                             self._atsim.get_chrom('y')]
         data_dict["Horizontal Emittance"] = self._atsim.get_emit('x') * 1e12
-        # data_dict["Linear Dispersion Action"] = 0.0
+        #data_dict["Linear Dispersion Action"] = 0.0
         """Ignore the Linear Dispersion Action (curly-H x) for now as it's
         complex to calculate and not particularly significant. It can be
         calculated for an element from the elements linear optics parameters:
@@ -317,8 +345,6 @@ class Window(QMainWindow):
         data_dict["Energy Loss per Turn"] = self._atsim.get_energy_loss()
         data_dict["Damping Times"] = self._atsim.get_damping_times() * 1e3
         data_dict["Damping Partition Numbers"] = self._atsim.get_damping_partition_numbers()
-        data_dict["Total Bend Angle"] = self._atsim.get_total_bend_angle()
-        data_dict["Total Absolute Bend Angle"] = self._atsim.get_total_absolute_bend_angle()
         return data_dict
 
     def get_element_data(self, selected_s_pos):
@@ -365,26 +391,24 @@ class Window(QMainWindow):
         each field. Usually called after a change has been made to the lattice.
         """
         for field, value in self.get_lattice_data().items():
-            val_str = self.stringify(value)
-            self.lattice_data_widgets[field].setText(val_str)
+            self.lattice_data_widgets[field].setText(self.stringify(value))
 
     def update_element_data(self, s_pos):
         """Iterate over the local linear optics data and update the values of
         each field. Usually called when a new s position selection is made.
         """
         for field, value in self.get_element_data(s_pos).items():
-            val_str = self.stringify(value)
-            self.element_data_widgets[field].setText(val_str)
+            self.element_data_widgets[field].setText(self.stringify(value))
 
     def plot(self):
         """Plot the graph inside the figure.
         """
-        self.lattice.radiation_off()
         self.figure.clear()
         self.axl = self.figure.add_subplot(111, xmargin=0, ymargin=0.025)
         self.axl.set_xlabel('s position [m]')
         self.axr = self.axl.twinx()
         self.axr.margins(0, 0.025)
+        self.lattice.radiation_off()  # ensure radiation state for linopt call
         at.plot.plot_beta(self.lattice, axes=(self.axl, self.axr))
         self.canvas.draw()
 
@@ -395,28 +419,23 @@ class Window(QMainWindow):
         """
         if event.xdata is not None:
             if self.s_selection is not None:
-                self.s_selection.remove()
+                self.s_selection.remove()  # remove old s selection line
             if event.button == 1:
                 self.s_selection = self.axl.axvline(event.xdata, color="black",
                                                     linestyle='--', zorder=3)
                 self.update_element_data(event.xdata)
-            else:
+            else:  # if not right click clear selection data
                 self.s_selection = None
                 for lab in self.element_data_widgets.values():
                     lab.setText("N/A")
             self.canvas.draw()
-        """
-        print('%s click: button=%d, x=%d, y=%d, xdata=%f, ydata=%f' %
-              ('double' if event.dblclick else 'single', event.button,
-               event.x, event.y, event.xdata, event.ydata))
-        """
 
     def resize_graph(self, width, height, redraw=False):
         """Resize the graph to a new width and(or) height; can also be used to
         force a redraw of the graph, without resizing, by way of the redraw
         argument.
         """
-        if not redraw:
+        if not redraw:  # doesn't redraw if not necessary and not forced
             redraw = bool((int(width) != int(self.graph_width)) or
                           (int(height) != int(self.graph_height)))
         if redraw:
@@ -444,22 +463,32 @@ class Window(QMainWindow):
 
     def resizeEvent(self, event):
         """Called when the window is resized; resizes the graph and lattice
-        representation accordingly for the new window size. N.B. the
-        hard-coded pixel offsets "just work^TM" for me, but may need to be
-        changed for alignment to work properly on a different machine.
+        representation accordingly for the new window size.
+        N.B.
+            1) The hard-coded pixel offsets are almost entirely arbitrary and
+               "just work^TM" for me, but may need to be changed for alignment
+               to work properly on a different machine.
+            2) All resizing related code is held together by willpower and
+               voodoo magic and will break if it senses fear.
         """
+        # Determine graph width from window size
         width = int(max([self.frameGeometry().width() - 500, 1000]))
         height = int(max([self.frameGeometry().height() - 350, 480]))
+        # Resize graph
         self.resize_graph(width, height)
+        # Get non-zero length element representation widths from graph width
         widths = self.calc_new_width(width - 125)
         for el_repr, w in zip(self.lat_repr, widths):
             if w != el_repr.width:
                 el_repr.changeSize(w)
+        # Two px more to account for end bars
         self.mid_line.changeSize(width - 123)
+        # Get lattice representation width from graph width
         zlr = self.calc_zero_len_repr(width - 125)
         zl_widths = [el_repr.width for el_repr in zlr]
         for el_repr, w in zip(self.zl_repr, zl_widths):
             el_repr.changeSize(w)
+        # If not a refresh call then resize the window
         if event is not None:
             super().resizeEvent(event)
 
@@ -468,6 +497,9 @@ class element_repr(QWidget):
     """Class for creating the coloured element representation bars/boxes.
     """
     def __init__(self, index, colour, width, height=50, drag=True):
+        # Default height is 50px making the total height, including the
+        # dividing line, of the lattice representation 101px.
+        # Other values don't work.
         super().__init__()
         self.index = index
         self.colour = colour
@@ -489,6 +521,7 @@ class element_repr(QWidget):
         """Called on resize; minimum width and height are set to prevent
         stretching/squishing.
         """
+        # Allowing height changing here is a recipe for disaster...
         self.width = width
         self.setMinimumWidth(width)
         if height is not None:
@@ -505,7 +538,7 @@ class element_repr(QWidget):
                 mimeData.setText(str(self.index))
                 drag = QDrag(self)
                 drag.setMimeData(mimeData)
-                drag.exec(Qt.MoveAction)  # dropAction =
+                drag.exec(Qt.MoveAction)
         return
 
 
@@ -648,25 +681,31 @@ class edit_box(QGroupBox):
 
 
 class PassMethodValidator(QValidator):
-    """Check that a given PassMethod is valid.
+    """Check that a given PassMethod is valid. Used to validate inputs to the
+    PassMethod fields of the edit boxes.
     """
     def __init__(self):
         super().__init__()
 
     def validate(self, string, pos):
-        """Check that it is a non-zero length string, ending in 'Pass' which
-        has a corresponding built file (e.g. DriftPass.so).
+        """Check that it is a  alphanumeric string of non-zero length, ending
+        in 'Pass' which has a corresponding built file (e.g. DriftPass.so).
         """
-        if (len(string) > 0) and (not string.isalnum()):
+        # It's currently broken so yeah...
+        if not string.isalnum():
+            print('i1')
             return (QValidator.Invalid, string, pos)
         elif string.endswith("Pass"):
             file_name = at.load.utils.get_pass_method_file_name(string)
             file_path = os.path.join(at.integrators.__path__[0], file_name)
             if os.path.isfile(os.path.realpath(file_path)):
+                print('v1')
                 return (QValidator.Acceptable, string, pos)
             else:
+                print('i2')
                 return (QValidator.Invalid, string, pos)
         else:
+            print('v2')
             return (QValidator.Intermediate, string, pos)
 
 
