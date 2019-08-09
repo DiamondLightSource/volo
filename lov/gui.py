@@ -24,16 +24,15 @@ class Window(QMainWindow):
         """
         super(Window, self).__init__(parent)
         # Lattice loading
-        self.pytac_lattice = atip.utils.loader()
-        self.lattice = atip.utils.get_sim_lattice(self.pytac_lattice)
-        self._atsim = atip.utils.get_atsim(self.pytac_lattice)
+        self.lattice = atip.utils.load_at_lattice('DIAD')
+        self._atsim = atip.simulator.ATSimulator(self.lattice)
         self.s_selection = None
 
         # Super-period support
-        self.total_len = sum([elem.Length for elem in self.lattice])
+        self.total_len = self.lattice.circumference
         self.n = 1
         if self.n is not None:
-            superperiod_len = self.total_len / 6.0
+            superperiod_len = self.lattice.circumference / 6.0
             superperiod_bounds = superperiod_len * numpy.array(range(7))
             self.lattice.s_range = superperiod_bounds[self.n-1:self.n+1]
             self.total_len = self.lattice.s_range[1] - self.lattice.s_range[0]
@@ -123,10 +122,10 @@ class Window(QMainWindow):
         # Create element editing boxes to drop to
         bottom = QHBoxLayout()
         # Future possibility to auto determine number of boxes by window size
-        bottom.addWidget(edit_box(self, self.pytac_lattice))
-        bottom.addWidget(edit_box(self, self.pytac_lattice))
-        bottom.addWidget(edit_box(self, self.pytac_lattice))
-        bottom.addWidget(edit_box(self, self.pytac_lattice))
+        bottom.addWidget(edit_box(self, self._atsim))
+        bottom.addWidget(edit_box(self, self._atsim))
+        bottom.addWidget(edit_box(self, self._atsim))
+        bottom.addWidget(edit_box(self, self._atsim))
         # Add edit boxes to left side layout
         self.left_side.addLayout(bottom)
 
@@ -546,12 +545,11 @@ class edit_box(QGroupBox):
     """Class for creating element editing boxes that element representations
     can be dragged to to display information and be edited.
     """
-    def __init__(self, window, pytac_lattice):
+    def __init__(self, window, atsim):
         super().__init__()
         self.parent_window = window
-        self.pytac_lattice = pytac_lattice
-        self.lattice = atip.utils.get_sim_lattice(pytac_lattice)
-        self._atsim = atip.utils.get_atsim(pytac_lattice)
+        self.lattice = atip.utils.get_sim_lattice(atsim)
+        self._atsim = atsim
         self.setMaximumSize(350, 200)
         self.setAcceptDrops(True)
         self.dl = self.create_box()
@@ -649,7 +647,6 @@ class edit_box(QGroupBox):
         if round(element.Length, 5) != float(self.dl["Length"].text()):
             length = float(self.dl["Length"].text())
             element.Length = length
-            self.pytac_lattice[element.Index - 1].length = length
         elif element.PassMethod != self.dl["PassMethod"].text():
             element.PassMethod = self.dl["PassMethod"].text()
         elif self.dl["SetPoint"][0].text() == "BendingAngle":
@@ -675,7 +672,7 @@ class edit_box(QGroupBox):
         else:
             change = False
         if change:
-            atip.utils.trigger_calc(self.pytac_lattice)
+            atip.utils.trigger_calc(self._atsim)
             self._atsim.wait_for_calculations()
             self.parent_window.refresh_all()
 
