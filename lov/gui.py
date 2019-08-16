@@ -24,18 +24,20 @@ class Window(QMainWindow):
         """
         super(Window, self).__init__(parent)
         # Lattice loading
-        self.lattice = atip.utils.load_at_lattice('DIAD')
+        ring = atip.utils.load_at_lattice('DIAD')
+        sp_len = ring.circumference/6.0
+        ring.s_range = [0, sp_len]
+        self.lattice = ring[ring.i_range[0]:ring.i_range[-1]]
+        #self.lattice = at.load_tracy('../atip/atip/rings/for_Tobyn.lat')
+        for idx, elem in enumerate(self.lattice):
+            elem.Index = idx + 1
         self._atsim = atip.simulator.ATSimulator(self.lattice)
         self.s_selection = None
 
         # Super-period support
-        self.total_len = self.lattice.circumference
-        self.n = 1
-        if self.n is not None:
-            superperiod_len = self.lattice.circumference / 6.0
-            superperiod_bounds = superperiod_len * numpy.array(range(7))
-            self.lattice.s_range = superperiod_bounds[self.n-1:self.n+1]
-            self.total_len = self.lattice.s_range[1] - self.lattice.s_range[0]
+        self.total_len = self.lattice.get_s_pos(len(self.lattice))[0]
+        #self.symmetry = vars(self.lattice).get('periodicity', 1)
+        self.symmetry = 6
 
         # Create UI
         self.initUI()
@@ -139,7 +141,7 @@ class Window(QMainWindow):
         sidebar = QGridLayout(sidebar_border)
         sidebar.setSpacing(10)
         # Determine correct global title
-        if self.n is None:
+        if self.symmetry == 1:
             title = QLabel("Global Lattice Parameters:")
         else:
             title = QLabel("Global Super Period Parameters:")
@@ -178,7 +180,7 @@ class Window(QMainWindow):
         # Add units tool tips where applicable
         self.lattice_data_widgets["Total Length"].setToolTip("m")
         self.lattice_data_widgets["Horizontal Emittance"].setToolTip("pm")
-        #self.lattice_data_widgets["Linear Dispersion Action"].setToolTip("m")
+        self.lattice_data_widgets["Linear Dispersion Action"].setToolTip("m")
         self.lattice_data_widgets["Energy Loss per Turn"].setToolTip("eV")
         self.lattice_data_widgets["Damping Times"].setToolTip("msec")
         self.lattice_data_widgets["Total Bend Angle"].setToolTip("deg")
@@ -206,7 +208,7 @@ class Window(QMainWindow):
         lat_repr = []
         self.zero_length = []
         self.base_widths = []
-        for elem in self.lattice[:self.lattice.i_range[-1]]:
+        for elem in self.lattice:#[:self.lattice.i_range[-1]]:
             width = math.ceil(elem.Length)
             if width == 0:
                 if not (isinstance(elem, at.elements.Drift) or
@@ -316,31 +318,20 @@ class Window(QMainWindow):
         """Calculate the global linear optics data for the lattice, and return
         it in a dictionary by its field names.
         """
+        self._atsim.wait_for_calculations()
         data_dict = OrderedDict()
-        data_dict["Number of Elements"] = len(self.lattice.i_range)
+        data_dict["Number of Elements"] = len(self.lattice)
         data_dict["Total Length"] = self.total_len
         data_dict["Total Bend Angle"] = self._atsim.get_total_bend_angle()
         data_dict["Total Absolute Bend Angle"] = self._atsim.get_total_absolute_bend_angle()
         data_dict["Cell Tune"] = [self._atsim.get_tune('x'),
                                   self._atsim.get_tune('y')]
-        data_dict["Linear Chromaticity"] = [self._atsim.get_chrom('x'),
-                                            self._atsim.get_chrom('y')]
-        data_dict["Horizontal Emittance"] = self._atsim.get_emit('x') * 1e12
-        #data_dict["Linear Dispersion Action"] = 0.0
-        """Ignore the Linear Dispersion Action (curly-H x) for now as it's
-        complex to calculate and not particularly significant. It can be
-        calculated for an element from the elements linear optics parameters:
-            (curly-H x) = (gamma x) * (dispersion x)^2
-                          + 2(alpha x) * (dispersion x) * (dispersion px)
-                          + (beta x) * (dispersion px)^2
-        The Linear Dispersion Action for the whole lattice could then be
-        calculated by integrating through the Linear Dispersion Action at each
-        element. It can also be derived, for the whole lattice, from the
-        Synchrotron/Radiation Integrals; however, these cannot currently be
-        calculated in pyAT.
-        """
+        data_dict["Linear Chromaticity"] = [self._atsim.get_chromaticity('x'),
+                                            self._atsim.get_chromaticity('y')]
+        data_dict["Horizontal Emittance"] = self._atsim.get_horizontal_emittance() * 1e12
+        data_dict["Linear Dispersion Action"] = self._atsim.get_linear_dispersion_action()
         data_dict["Momentum Spread"] = self._atsim.get_energy_spread()
-        data_dict["Linear Momentum Compaction"] = self._atsim.get_mcf()
+        data_dict["Linear Momentum Compaction"] = self._atsim.get_momentum_compaction()
         data_dict["Energy Loss per Turn"] = self._atsim.get_energy_loss()
         data_dict["Damping Times"] = self._atsim.get_damping_times() * 1e3
         data_dict["Damping Partition Numbers"] = self._atsim.get_damping_partition_numbers()
@@ -351,6 +342,7 @@ class Window(QMainWindow):
         linear optics data for the lattice, and return it in a dictionary by
         its field names.
         """
+        self._atsim.wait_for_calculations()
         data_dict = OrderedDict()
         all_s = self._atsim.get_s()
         index = int(numpy.where([s <= selected_s_pos for s in all_s])[0][-1])
@@ -358,7 +350,7 @@ class Window(QMainWindow):
         data_dict["Element Index"] = index + 1
         data_dict["Element Start S Position"] = all_s[index]
         data_dict["Element Length"] = self._atsim.get_at_element(index+1).Length
-        data_dict["Horizontal Linear Dispersion"] = self._atsim.get_disp()[index, 0]
+        data_dict["Horizontal Linear Dispersion"] = self._atsim.get_dispersion()[index, 0]
         data_dict["Beta Function"] = self._atsim.get_beta()[index]
         data_dict["Derivative of Beta Function"] = self._atsim.get_alpha()[index]
         data_dict["Normalized Phase Advance"] = self._atsim.get_mu()[index]/(2*numpy.pi)
