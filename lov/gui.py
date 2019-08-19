@@ -9,7 +9,7 @@ import math
 import numpy
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
-from PyQt5.QtCore import Qt, QMargins, QMimeData
+from PyQt5.QtCore import Qt, QMargins, QMimeData, QEvent
 from PyQt5.QtGui import QPainter, QDrag, QDoubleValidator, QValidator
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QGroupBox, QWidget,
                              QVBoxLayout, QHBoxLayout, QLabel, QGridLayout,
@@ -27,7 +27,7 @@ class Window(QMainWindow):
         ring = atip.utils.load_at_lattice('DIAD')
         sp_len = ring.circumference/6.0
         ring.s_range = [0, sp_len]
-        self.lattice = ring[ring.i_range[0]:ring.i_range[-1]]
+        self.lattice = ring[ring.i_range[0]:ring.i_range[-1]]# + [ring[1491]]
         #self.lattice = at.load_tracy('../atip/atip/rings/for_Tobyn.lat')
         for idx, elem in enumerate(self.lattice):
             elem.Index = idx + 1
@@ -123,11 +123,12 @@ class Window(QMainWindow):
 
         # Create element editing boxes to drop to
         bottom = QHBoxLayout()
+        self.edit_boxes = []
         # Future possibility to auto determine number of boxes by window size
-        bottom.addWidget(edit_box(self, self._atsim))
-        bottom.addWidget(edit_box(self, self._atsim))
-        bottom.addWidget(edit_box(self, self._atsim))
-        bottom.addWidget(edit_box(self, self._atsim))
+        for i in range(4):
+            box = edit_box(self, self._atsim)
+            self.edit_boxes.append(box)
+            bottom.addWidget(box)
         # Add edit boxes to left side layout
         self.left_side.addLayout(bottom)
 
@@ -283,13 +284,13 @@ class Window(QMainWindow):
                                               drag=False))
             elem = self.zero_length[i-1]
             if isinstance(elem, at.elements.Monitor):
-                elem_repr = element_repr(elem.Index, Qt.magenta, 1, drag=False)
+                elem_repr = element_repr(elem.Index, Qt.magenta, 1)
             elif isinstance(elem, at.elements.RFCavity):
-                elem_repr = element_repr(elem.Index, Qt.cyan, 1, drag=False)
+                elem_repr = element_repr(elem.Index, Qt.cyan, 1)
             elif isinstance(elem, at.elements.Corrector):
-                elem_repr = element_repr(elem.Index, Qt.blue, 1, drag=False)
+                elem_repr = element_repr(elem.Index, Qt.blue, 1)
             else:
-                elem_repr = element_repr(elem.Index, Qt.gray, 1, drag=False)
+                elem_repr = element_repr(elem.Index, Qt.gray, 1)
             zero_len_repr.append(elem_repr)
         diff = int(sum([el_repr.width for el_repr in zero_len_repr]) - width)
         if diff < 0:  # undershoot
@@ -451,6 +452,8 @@ class Window(QMainWindow):
             self.s_selection = self.axl.axvline(float(s_pos), color="black",
                                                 linestyle='--', zorder=3)
             self.canvas.draw()
+        for box in self.edit_boxes:
+            box.refresh()
 
     def resizeEvent(self, event):
         """Called when the window is resized; resizes the graph and lattice
@@ -583,6 +586,7 @@ class edit_box(QGroupBox):
         data_labels["PassMethod"].editingFinished.connect(self.enterPress)
         grid.addWidget(data_labels["PassMethod"], 3, 1)
         data_labels["SetPoint"] = (QComboBox(), QLineEdit("N/A"))
+        data_labels["SetPoint"][0].currentIndexChanged.connect(self.change_list_item)
         data_labels["SetPoint"][0].setSizeAdjustPolicy(0)
         data_labels["SetPoint"][0].addItem("Set Point")
         grid.addWidget(data_labels["SetPoint"][0], 5, 0)
@@ -636,6 +640,10 @@ class edit_box(QGroupBox):
         elif isinstance(element, at.elements.Quadrupole):
             self.dl["SetPoint"][0].addItem("K")
             self.dl["SetPoint"][1].setText(str(round(element.K, 5)))
+        elif isinstance(element, at.elements.RFCavity):
+            self.dl["SetPoint"][0].addItems(["Frequency", "Voltage",
+                                             "HarmNumber", "Energy"])
+            self.dl["SetPoint"][1].setText(str(round(element.Frequency, 5)))
         else:  # Drift or unsupported type.
             self.dl["SetPoint"][0].addItem("Set Point")
             self.dl["SetPoint"][1].setText("N/A")
@@ -682,12 +690,80 @@ class edit_box(QGroupBox):
                 element.K = float(self.dl["SetPoint"][1].text())
             else:
                 change = False
+        elif self.dl["SetPoint"][0].currentText() == "Frequency":
+            if round(element.Frequency,
+                     5) != float(self.dl["SetPoint"][1].text()):
+                element.Frequency = float(self.dl["SetPoint"].text())
+            else:
+                change = False
+        elif self.dl["SetPoint"][0].currentText() == "Voltage":
+            if round(element.Voltage,
+                     5) != float(self.dl["SetPoint"][1].text()):
+                element.Voltage = float(self.dl["SetPoint"].text())
+            else:
+                change = False
+        elif self.dl["SetPoint"][0].currentText() == "HarmNumber":
+            if round(element.HarmNumber,
+                     5) != float(self.dl["SetPoint"][1].text()):
+                element.HarmNumber = float(self.dl["SetPoint"].text())
+            else:
+                change = False
+        elif self.dl["SetPoint"][0].currentText() == "Energy":
+            if round(element.Energy,
+                     5) != float(self.dl["SetPoint"][1].text()):
+                element.Energy = float(self.dl["SetPoint"].text())
+            else:
+                change = False
         else:
             change = False
         if change:
             atip.utils.trigger_calc(self._atsim)
             self._atsim.wait_for_calculations()
             self.parent_window.refresh_all()
+
+    def change_list_item(self):
+        """Update the displayed data for the new field selection.
+        """
+        if not hasattr(self, "dl"):
+            return
+        element = self.lattice[int(self.dl["Index"].text()) - 1]
+        if self.dl["SetPoint"][0].currentText() == "BendingAngle":
+            self.dl["SetPoint"][1].setText(str(round(element.BendingAngle, 5)))
+        elif self.dl["SetPoint"][0].currentText() == "X Kick":
+            self.dl["SetPoint"][1].setText(str(round(element.KickAngle[0], 5)))
+        elif self.dl["SetPoint"][0].currentText() == "Y Kick":
+            self.dl["SetPoint"][1].setText(str(round(element.KickAngle[1], 5)))
+        elif self.dl["SetPoint"][0].currentText() == "H":
+            self.dl["SetPoint"][1].setText(str(round(element.H, 5)))
+        elif self.dl["SetPoint"][0].currentText() == "K":
+            self.dl["SetPoint"][1].setText(str(round(element.K, 5)))
+        elif self.dl["SetPoint"][0].currentText() == "Frequency":
+            self.dl["SetPoint"][1].setText(str(round(element.Frequency, 5)))
+        elif self.dl["SetPoint"][0].currentText() == "Voltage":
+            self.dl["SetPoint"][1].setText(str(round(element.Voltage, 5)))
+        elif self.dl["SetPoint"][0].currentText() == "HarmNumber":
+            self.dl["SetPoint"][1].setText(str(round(element.HarmNumber, 5)))
+        elif self.dl["SetPoint"][0].currentText() == "Energy":
+            self.dl["SetPoint"][1].setText(str(round(element.Energy, 5)))
+        elif self.dl["SetPoint"][0].currentText() == "Set Point":
+            self.dl["SetPoint"][1].setText("N/A")
+        elif self.dl["SetPoint"][0].currentText() == "":
+            return  # For some reason this happens on creation, so ignore it.
+        else:
+            raise("Unsupported AT field type {0}."
+                  .format(self.dl["SetPoint"][0].currentText()))
+
+    def refresh(self):
+        """Refresh the displayed data.
+        """
+        index = self.dl["Index"].text()
+        if index != "N/A":
+            class evnt(QEvent):
+                def mimeData(self):
+                    md = QMimeData()
+                    md.setText(str(index))
+                    return md
+            self.dropEvent(evnt(63))
 
 
 class PassMethodValidator(QValidator):
