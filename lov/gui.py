@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt, QMargins, QMimeData
 from PyQt5.QtGui import QPainter, QDrag, QDoubleValidator, QValidator
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QGroupBox, QWidget,
                              QVBoxLayout, QHBoxLayout, QLabel, QGridLayout,
-                             QLineEdit)
+                             QLineEdit, QComboBox)
 
 
 class Window(QMainWindow):
@@ -582,8 +582,9 @@ class edit_box(QGroupBox):
         data_labels["PassMethod"].setValidator(pass_validator)
         data_labels["PassMethod"].editingFinished.connect(self.enterPress)
         grid.addWidget(data_labels["PassMethod"], 3, 1)
-        data_labels["SetPoint"] = (QLabel("Set Point"), QLineEdit("N/A"))
-        data_labels["SetPoint"][0].setStyleSheet("background-color:none;")
+        data_labels["SetPoint"] = (QComboBox(), QLineEdit("N/A"))
+        data_labels["SetPoint"][0].setSizeAdjustPolicy(0)
+        data_labels["SetPoint"][0].addItem("Set Point")
         grid.addWidget(data_labels["SetPoint"][0], 5, 0)
         data_labels["SetPoint"][1].setAcceptDrops(False)
         data_labels["SetPoint"][1].setValidator(float_validator)
@@ -611,20 +612,32 @@ class edit_box(QGroupBox):
         self.dl["Type"].setText(element.Class)
         self.dl["Length"].setText(str(round(element.Length, 5)))
         self.dl["PassMethod"].setText(element.PassMethod)
+        # Clear ComboBox (drop-down list) contents.
+        for i in range(self.dl["SetPoint"][0].count()):
+            self.dl["SetPoint"][0].removeItem(i)
+        # Determine correct set point field based on element type.
         if isinstance(element, at.elements.Bend):
-            self.dl["SetPoint"][0].setText("BendingAngle")
+            self.dl["SetPoint"][0].addItem("BendingAngle")
             self.dl["SetPoint"][1].setText(str(round(element.BendingAngle, 5)))
         elif isinstance(element, at.elements.Corrector):
-            self.dl["SetPoint"][0].setText("KickAngle")  # hella broken
-            self.dl["SetPoint"][1].setText(str(round(element.KickAngle, 5)))
+            if (element.FamName == 'HSTR') or (element.FamName == 'HTRIM'):
+                self.dl["SetPoint"][0].addItem("X Kick")
+                self.dl["SetPoint"][1].setText(str(round(element.KickAngle[0],
+                                                         5)))
+            elif (element.FamName == 'VSTR') or (element.FamName == 'VTRIM'):
+                self.dl["SetPoint"][0].addItem("Y Kick")
+                self.dl["SetPoint"][1].setText(str(round(element.KickAngle[1],
+                                                         5)))
+            else:
+                self.dl["SetPoint"][0].addItems(["X Kick", "Y Kick"])
         elif isinstance(element, at.elements.Sextupole):
-            self.dl["SetPoint"][0].setText("H")
+            self.dl["SetPoint"][0].addItem("H")
             self.dl["SetPoint"][1].setText(str(round(element.H, 5)))
         elif isinstance(element, at.elements.Quadrupole):
-            self.dl["SetPoint"][0].setText("K")
+            self.dl["SetPoint"][0].addItem("K")
             self.dl["SetPoint"][1].setText(str(round(element.K, 5)))
         else:  # Drift or unsupported type.
-            self.dl["SetPoint"][0].setText("Set Point")
+            self.dl["SetPoint"][0].addItem("Set Point")
             self.dl["SetPoint"][1].setText("N/A")
         event.accept()
 
@@ -641,22 +654,30 @@ class edit_box(QGroupBox):
             element.Length = length
         elif element.PassMethod != self.dl["PassMethod"].text():
             element.PassMethod = self.dl["PassMethod"].text()
-        elif self.dl["SetPoint"][0].text() == "BendingAngle":
-            if round(element.BendingAngle, 5) != float(self.dl["SetPoint"][1].text()):
+        elif self.dl["SetPoint"][0].currentText() == "BendingAngle":
+            if round(element.BendingAngle,
+                     5) != float(self.dl["SetPoint"][1].text()):
                 element.BendingAngle = float(self.dl["SetPoint"][1].text())
             else:
                 change = False
-        elif self.dl["SetPoint"][0].text() == "KickAngle":
-            if round(element.KickAngle, 5) != float(self.dl["SetPoint"][1].text()):
-                element.KickAngle = float(self.dl["SetPoint"][1].text())
+        elif self.dl["SetPoint"][0].currentText() == "X Kick":
+            if round(element.KickAngle[0],
+                     5) != float(self.dl["SetPoint"][1].text()):
+                element.KickAngle[0] = float(self.dl["SetPoint"][1].text())
             else:
                 change = False
-        elif self.dl["SetPoint"][0].text() == "H":
+        elif self.dl["SetPoint"][0].currentText() == "Y Kick":
+            if round(element.KickAngle[1],
+                     5) != float(self.dl["SetPoint"][1].text()):
+                element.KickAngle[1] = float(self.dl["SetPoint"][1].text())
+            else:
+                change = False
+        elif self.dl["SetPoint"][0].currentText() == "H":
             if round(element.H, 5) != float(self.dl["SetPoint"][1].text()):
                 element.H = float(self.dl["SetPoint"][1].text())
             else:
                 change = False
-        elif self.dl["SetPoint"][0].text() == "K":
+        elif self.dl["SetPoint"][0].currentText() == "K":
             if round(element.K, 5) != float(self.dl["SetPoint"][1].text()):
                 element.K = float(self.dl["SetPoint"][1].text())
             else:
