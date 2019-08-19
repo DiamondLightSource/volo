@@ -36,8 +36,8 @@ class Window(QMainWindow):
 
         # Super-period support
         self.total_len = self.lattice.get_s_pos(len(self.lattice))[0]
-        #self.symmetry = vars(self.lattice).get('periodicity', 1)
         self.symmetry = 6
+        #self.symmetry = vars(self.lattice).get('periodicity', 1)
 
         # Create UI
         self.initUI()
@@ -280,6 +280,9 @@ class Window(QMainWindow):
         zero_len_repr = []
         for i in range(1, len(positions), 1):
             gap_length = int(round(positions[i] - positions[i-1]))
+            # N.B. zero length gap spacers are not drag-and-drop-able as they
+            # are not drifts, however this could potentially be added in future
+            # to allow zero length elements to be moved.
             zero_len_repr.append(element_repr(-1, Qt.white, gap_length,
                                               drag=False))
             elem = self.zero_length[i-1]
@@ -748,7 +751,7 @@ class edit_box(QGroupBox):
         elif self.dl["SetPoint"][0].currentText() == "Set Point":
             self.dl["SetPoint"][1].setText("N/A")
         elif self.dl["SetPoint"][0].currentText() == "":
-            return  # For some reason this happens on creation, so ignore it.
+            return  # For some reason this happens initially, so ignore it.
         else:
             raise("Unsupported AT field type {0}."
                   .format(self.dl["SetPoint"][0].currentText()))
@@ -763,7 +766,7 @@ class edit_box(QGroupBox):
                     md = QMimeData()
                     md.setText(str(index))
                     return md
-            self.dropEvent(evnt(63))
+            self.dropEvent(evnt(63))  # Type 63 for drag and drop completion.
 
 
 class PassMethodValidator(QValidator):
@@ -777,21 +780,16 @@ class PassMethodValidator(QValidator):
         """Check that it is a  alphanumeric string of non-zero length, ending
         in 'Pass' which has a corresponding built file (e.g. DriftPass.so).
         """
-        # It's currently broken so yeah...
-        if not string.isalnum():
-            print('i1')
+        if (string != '') and (not string.isalnum()):
             return (QValidator.Invalid, string, pos)
         elif string.endswith("Pass"):
             file_name = at.load.utils.get_pass_method_file_name(string)
             file_path = os.path.join(at.integrators.__path__[0], file_name)
             if os.path.isfile(os.path.realpath(file_path)):
-                print('v1')
                 return (QValidator.Acceptable, string, pos)
             else:
-                print('i2')
                 return (QValidator.Invalid, string, pos)
         else:
-            print('v2')
             return (QValidator.Intermediate, string, pos)
 
 
