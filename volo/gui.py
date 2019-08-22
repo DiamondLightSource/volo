@@ -28,6 +28,7 @@ class Window(QMainWindow):
         sp_len = ring.circumference/6.0
         ring.s_range = [0, sp_len]
         self.lattice = ring[ring.i_range[0]:ring.i_range[-1]]# + [ring[1491]]
+        """
         self.lattice = at.load_tracy('../atip/atip/rings/for_Tobyn.lat')
         zl = []
         for idx, elem in enumerate(self.lattice):
@@ -38,7 +39,8 @@ class Window(QMainWindow):
         for idx in zl:
             self.lattice.__delitem__(idx)
         print(len(self.lattice))
-        self._atsim = atip.simulator.ATSimulator(self.lattice)
+        """
+        self._atsim = atip.simulator.ATSimulator(self.lattice, emit_calc=False)
         self.s_selection = None
 
         # Super-period support
