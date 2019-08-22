@@ -97,6 +97,8 @@ class Window(QMainWindow):
             self.lat_disp.addWidget(el_repr)
         # Add endline
         self.lat_disp.addWidget(element_repr(-1, Qt.black, 1, drag=False))
+        # Add offset
+        self.lat_disp.addWidget(element_repr(-1, Qt.white, 3, drag=False))
         # Add a stretch at both ends to keep the lattice representation centred
         self.lat_disp.addStretch()
         # Add non-zero length representation to lattice representation layout
@@ -104,9 +106,13 @@ class Window(QMainWindow):
 
         # Add horizontal dividing line
         self.black_bar = QHBoxLayout()
+        self.black_bar.setSpacing(0)
         self.black_bar.addStretch()  # Keep it centred
         self.mid_line = element_repr(-1, Qt.black, 1000, height=1, drag=False)
         self.black_bar.addWidget(self.mid_line)
+        # Add offset
+        self.black_bar.addWidget(element_repr(-1, Qt.white, 3, height=1,
+                                              drag=False))
         self.black_bar.addStretch()  # Keep it centred
         self.full_disp.addLayout(self.black_bar)
 
@@ -123,6 +129,8 @@ class Window(QMainWindow):
             self.zl_disp.addWidget(el_repr)
         # Add endline
         self.zl_disp.addWidget(element_repr(-1, Qt.black, 1, drag=False))
+        # Add offset
+        self.zl_disp.addWidget(element_repr(-1, Qt.white, 3, drag=False))
         # Add a stretch at both ends to keep the lattice representation centred
         self.zl_disp.addStretch()
         # Add zero length representation to lattice representation layout
@@ -483,14 +491,14 @@ class Window(QMainWindow):
         # Resize graph
         self.resize_graph(width, height)
         # Get non-zero length element representation widths from graph width
-        widths = self.calc_new_width(width - 125)
+        widths = self.calc_new_width(width - 127)
         for el_repr, w in zip(self.lat_repr, widths):
             if w != el_repr.width:
                 el_repr.changeSize(w)
         # Two px more to account for end bars
-        self.mid_line.changeSize(width - 123)
+        self.mid_line.changeSize(width - 125)
         # Get lattice representation width from graph width
-        zlr = self.calc_zero_len_repr(width - 125)
+        zlr = self.calc_zero_len_repr(width - 127)
         zl_widths = [el_repr.width for el_repr in zlr]
         for el_repr, w in zip(self.zl_repr, zl_widths):
             el_repr.changeSize(w)
